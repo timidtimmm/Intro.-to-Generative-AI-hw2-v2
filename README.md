@@ -1,7 +1,6 @@
-# HW01 - Your own ChatGPT (FastAPI 版)
+# HW01 - Your own ChatGPT
 
-這是一份可直接交作業的 Python 版本：
-
+## 主要概念
 - 後端：FastAPI
 - 前端：HTML + CSS
 - 少量 JavaScript：送出訊息、接收 streaming、更新畫面
@@ -20,7 +19,7 @@
 hw01-python-chatgpt-fastapi/
 ├─ app.py
 ├─ requirements.txt
-├─ .env.example
+├─ .env
 ├─ .gitignore
 ├─ README.md
 ├─ templates/
