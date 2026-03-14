@@ -16,7 +16,7 @@
 ## 專案結構
 
 ```text
-hw01-python-chatgpt-fastapi/
+hw01-python-chatgpt/
 ├─ app.py
 ├─ requirements.txt
 ├─ .env
