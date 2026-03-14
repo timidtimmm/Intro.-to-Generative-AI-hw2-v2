@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HW01 - Your own ChatGPT (NVIDIA NIM)</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="panel">
+          <h1>HW01. Your own ChatGPT</h1>
+          <p class="subtext">
+            NVIDIA NIM + FastAPI + HTML/CSS + 少量 JavaScript
+          </p>
+
+          <section class="section">
+            <label for="model">LLM 模型</label>
+            <select id="model">
+              <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+              <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
+              <option value="moonshotai/kimi-k2-instruct">moonshotai/kimi-k2-instruct</option>
+            </select>
+          </section>
+
+          <section class="section">
+            <div class="row between">
+              <label for="systemPrompt">System Prompt</label>
+              <div class="mini-actions">
+                <button id="presetDefault" type="button">Default</button>
+                <button id="presetTeacher" type="button">Teacher</button>
+              </div>
+            </div>
+
+            <textarea id="systemPrompt" class="prompt-box">You are a helpful assistant. Answer clearly and accurately.</textarea>
+
+            <div class="mini-actions">
+              <button id="presetCoder" type="button">Coder</button>
+              <button id="presetTranslator" type="button">Translator</button>
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="slider-group">
+              <div class="row between">
+                <label for="temperature">Temperature</label>
+                <span id="temperatureValue">0.7</span>
+              </div>
+              <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
+            </div>
+
+            <div class="slider-group">
+              <div class="row between">
+                <label for="topP">Top-p</label>
+                <span id="topPValue">1.0</span>
+              </div>
+              <input id="topP" type="range" min="0.1" max="1" step="0.1" value="1.0" />
+            </div>
+
+            <div class="slider-group">
+              <div class="row between">
+                <label for="maxTokens">Max Tokens</label>
+                <span id="maxTokensValue">512</span>
+              </div>
+              <input id="maxTokens" type="range" min="64" max="2048" step="64" value="512" />
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="toggle-card">
+              <div>
+                <strong>Streaming</strong>
+                <p>可切換串流輸出</p>
+              </div>
+              <input id="streaming" type="checkbox" checked />
+            </div>
+
+            <div class="toggle-card">
+              <div>
+                <strong>短期記憶</strong>
+                <p>保留最近幾則對話作為上下文</p>
+              </div>
+              <input id="shortMemory" type="checkbox" checked />
+            </div>
+
+            <div class="slider-group">
+              <div class="row between">
+                <label for="memoryWindow">記憶視窗</label>
+                <span id="memoryWindowValue">8</span>
+              </div>
+              <input id="memoryWindow" type="range" min="2" max="20" step="1" value="8" />
+            </div>
+          </section>
+
+          <section class="section">
+            <div class="action-buttons">
+              <button class="danger" id="clearChat" type="button">清空對話</button>
+              <button class="secondary" id="stopStreaming" type="button">停止生成</button>
+            </div>
+          </section>
+
+          <div class="note-box">
+            NVIDIA API key 只放在後端 <code>.env</code>，不要放在前端。
+          </div>
+        </div>
+      </aside>
+
+      <main class="chat-area">
+        <div class="chat-header">
+          <div>
+            <h2>Chat</h2>
+            <p id="currentModelText">目前模型：{{ default_model }}</p>
+          </div>
+          <div class="badge-group">
+            <span class="badge" id="streamingBadge">Streaming On</span>
+            <span class="badge" id="memoryBadge">Memory 8</span>
+          </div>
+        </div>
+
+        <div class="messages" id="messages"></div>
+
+        <div class="composer">
+          <div class="error-box hidden" id="errorBox"></div>
+
+          <label for="chatInput">Message</label>
+          <textarea
+            id="chatInput"
+            placeholder="輸入訊息，按 Enter 傳送，Shift + Enter 換行"
+          ></textarea>
+
+          <div class="composer-actions">
+            <button class="send-button" id="sendButton" type="button">送出</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
