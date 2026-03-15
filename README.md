@@ -1,5 +1,8 @@
 # HW01 - Your own ChatGPT
 
+## Information
+作者: 112550190 劉彥廷
+
 ## 主要概念
 - 後端：FastAPI
 - 前端：HTML + CSS
@@ -75,16 +78,20 @@ uvicorn app:app --reload
 http://127.0.0.1:8000
 ```
 
-## Demo 建議展示
+## Demo 展示
 
 1. 切換模型
 2. 修改 system prompt
 3. 調整 temperature / top-p / max tokens
 4. 開關 streaming
 5. 開關短期記憶，展示上下文差異
-
+6. 清空對話/停止生成
+   
 ## 交作業注意事項
 
 - `.env` 不要上傳到 GitHub
 - GitHub 只放 `.env.example`
 - API key 不要寫死在前端或程式碼裡
+
+## 注意事項
+禁止抄襲和複製貼上，抄襲是不好的行為
