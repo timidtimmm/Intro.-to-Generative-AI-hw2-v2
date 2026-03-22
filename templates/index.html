@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-Hant">
+<html lang="zh-Hant" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,134 +8,173 @@
   </head>
   <body>
     <div class="app-shell">
+
+      <!-- ── Sidebar ─────────────────────────────────────────── -->
       <aside class="sidebar">
         <div class="panel">
-          <h1>HW01. Your own ChatGPT</h1>
-          <p class="subtext">
-            NVIDIA NIM + FastAPI + HTML/CSS + 少量 JavaScript
-          </p>
 
+          <div class="sidebar-top-row">
+            <h1>HW01. ChatGPT</h1>
+            <button id="themeToggle" class="theme-btn">☀️ 淺色</button>
+          </div>
+          <p class="subtext">NVIDIA NIM + FastAPI + HTML/CSS + JavaScript</p>
+
+          <!-- Session history -->
+          <section class="section">
+            <div class="row between">
+              <label>對話記錄</label>
+              <button id="newChatBtn" class="icon-btn">＋ 新對話</button>
+            </div>
+            <div id="sessionList" class="session-list"></div>
+            <div class="mini-actions" style="margin-top:10px">
+              <button id="exportMd"   class="secondary">⬇ .md</button>
+              <button id="exportJson" class="secondary">⬇ .json</button>
+            </div>
+          </section>
+
+          <!-- Accent color picker -->
+          <section class="section">
+            <label>🎨 主題顏色</label>
+            <div id="accentSwatches" class="accent-swatches"></div>
+            <div class="row" style="margin-top:8px;gap:8px">
+              <span style="font-size:12px;color:var(--subtext)">自訂</span>
+              <input type="color" id="accentCustom" value="#10a37f" style="width:36px;height:28px;border:none;background:none;cursor:pointer;padding:0" />
+            </div>
+          </section>
+
+          <!-- Model -->
           <section class="section">
             <label for="model">LLM 模型</label>
             <select id="model">
-              <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-              <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
-              <option value="moonshotai/kimi-k2-instruct">moonshotai/kimi-k2-instruct</option>
+              <optgroup label="文字模型">
+                <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
+                <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
+                <option value="moonshotai/kimi-k2-instruct">moonshotai/kimi-k2-instruct</option>
+              </optgroup>
+              <optgroup label="👁 Vision 模型（支援圖片）">
+                <option value="meta/llama-3.2-11b-vision-instruct">llama-3.2-11b-vision ⭐</option>
+                <option value="microsoft/phi-3.5-vision-instruct">phi-3.5-vision</option>
+              </optgroup>
             </select>
+            <p id="visionHint" class="vision-hint hidden">👁 此模型支援圖片上傳</p>
           </section>
 
+          <!-- System Prompt + Custom Templates -->
           <section class="section">
-            <div class="row between">
-              <label for="systemPrompt">System Prompt</label>
-              <div class="mini-actions">
-                <button id="presetDefault" type="button">Default</button>
-                <button id="presetTeacher" type="button">Teacher</button>
-              </div>
-            </div>
-
+            <label for="systemPrompt">System Prompt</label>
             <textarea id="systemPrompt" class="prompt-box">You are a helpful assistant. Answer clearly and accurately.</textarea>
-
-            <div class="mini-actions">
-              <button id="presetCoder" type="button">Coder</button>
-              <button id="presetTranslator" type="button">Translator</button>
+            <div style="margin-top:10px">
+              <label style="font-size:12px;color:var(--subtext);font-weight:500">📋 Prompt 模板</label>
+              <div id="promptTemplatesList" class="template-list"></div>
+            </div>
+            <div class="template-add-form">
+              <input id="newTemplateName" type="text" placeholder="模板名稱" class="template-input" />
+              <textarea id="newTemplateText" placeholder="Prompt 內容…" class="template-textarea"></textarea>
+              <button id="saveTemplateBtn" class="icon-btn" style="width:100%">＋ 儲存模板</button>
             </div>
           </section>
 
+          <!-- Parameters -->
           <section class="section">
             <div class="slider-group">
-              <div class="row between">
-                <label for="temperature">Temperature</label>
-                <span id="temperatureValue">0.7</span>
-              </div>
+              <div class="row between"><label for="temperature">Temperature</label><span id="temperatureValue">0.7</span></div>
               <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
             </div>
-
             <div class="slider-group">
-              <div class="row between">
-                <label for="topP">Top-p</label>
-                <span id="topPValue">1.0</span>
-              </div>
+              <div class="row between"><label for="topP">Top-p</label><span id="topPValue">1.0</span></div>
               <input id="topP" type="range" min="0.1" max="1" step="0.1" value="1.0" />
             </div>
-
             <div class="slider-group">
-              <div class="row between">
-                <label for="maxTokens">Max Tokens</label>
-                <span id="maxTokensValue">512</span>
-              </div>
-              <input id="maxTokens" type="range" min="64" max="2048" step="64" value="512" />
+              <div class="row between"><label for="maxTokens">Max Tokens</label><span id="maxTokensValue">512</span></div>
+              <input id="maxTokens" type="range" min="64" max="4096" step="64" value="512" />
+            </div>
+            <div class="slider-group">
+              <div class="row between"><label for="fontSize">字體大小</label><span id="fontSizeValue">15px</span></div>
+              <input id="fontSize" type="range" min="12" max="22" step="1" value="15" />
             </div>
           </section>
 
+          <!-- Toggles -->
           <section class="section">
             <div class="toggle-card">
-              <div>
-                <strong>Streaming</strong>
-                <p>可切換串流輸出</p>
-              </div>
+              <div><strong>Streaming</strong><p>串流輸出</p></div>
               <input id="streaming" type="checkbox" checked />
             </div>
-
             <div class="toggle-card">
-              <div>
-                <strong>短期記憶</strong>
-                <p>保留最近幾則對話作為上下文</p>
-              </div>
+              <div><strong>🧠 Thinking 模式</strong><p>讓 LLM 先深度思考再回答</p></div>
+              <input id="thinkingMode" type="checkbox" />
+            </div>
+            <div class="slider-group" id="thinkingBudgetGroup" style="display:none">
+              <div class="row between"><label for="thinkingBudget">Thinking Budget</label><span id="thinkingBudgetValue">5000</span></div>
+              <input id="thinkingBudget" type="range" min="500" max="20000" step="500" value="5000" />
+            </div>
+            <div class="toggle-card">
+              <div><strong>短期記憶</strong><p>保留最近幾則對話</p></div>
               <input id="shortMemory" type="checkbox" checked />
             </div>
-
             <div class="slider-group">
-              <div class="row between">
-                <label for="memoryWindow">記憶視窗</label>
-                <span id="memoryWindowValue">8</span>
-              </div>
+              <div class="row between"><label for="memoryWindow">記憶視窗</label><span id="memoryWindowValue">8</span></div>
               <input id="memoryWindow" type="range" min="2" max="20" step="1" value="8" />
             </div>
           </section>
 
+          <!-- Actions -->
           <section class="section">
             <div class="action-buttons">
-              <button class="danger" id="clearChat" type="button">清空對話</button>
-              <button class="secondary" id="stopStreaming" type="button">停止生成</button>
+              <button class="danger" id="clearChat">清空對話</button>
+              <button class="secondary" id="stopStreaming">停止生成</button>
             </div>
           </section>
 
-          <div class="note-box">
-            NVIDIA API key 只放在後端 <code>.env</code>，不要放在前端。
-          </div>
+          <div class="note-box">NVIDIA API key 只放在後端 <code>.env</code>，不要放在前端。</div>
         </div>
       </aside>
 
+      <!-- ── Main Chat ───────────────────────────────────────── -->
       <main class="chat-area">
         <div class="chat-header">
           <div>
-            <h2>Chat</h2>
+            <h2 id="chatTitle">Chat</h2>
             <p id="currentModelText">目前模型：{{ default_model }}</p>
           </div>
           <div class="badge-group">
             <span class="badge" id="streamingBadge">Streaming On</span>
             <span class="badge" id="memoryBadge">Memory 8</span>
+            <span class="badge hidden" id="thinkingBadge">🧠 Thinking</span>
+            <span class="badge hidden token-badge" id="tokenBadge">↑0 ↓0 tok</span>
+            <!-- Chart toggle button -->
+            <button id="chartToggle" class="chart-toggle-btn">📊 Token 圖表</button>
+          </div>
+        </div>
+
+        <!-- Token chart panel (collapsible) -->
+        <div id="chartPanel" class="chart-panel">
+          <div class="chart-inner">
+            <canvas id="tokenChart"></canvas>
           </div>
         </div>
 
         <div class="messages" id="messages"></div>
+        <div id="attachmentPreview" class="attachment-preview hidden"></div>
 
         <div class="composer">
           <div class="error-box hidden" id="errorBox"></div>
-
           <label for="chatInput">Message</label>
-          <textarea
-            id="chatInput"
-            placeholder="輸入訊息，按 Enter 傳送，Shift + Enter 換行"
-          ></textarea>
-
+          <textarea id="chatInput" placeholder="輸入訊息，按 Enter 傳送，Shift + Enter 換行"></textarea>
           <div class="composer-actions">
-            <button class="send-button" id="sendButton" type="button">送出</button>
+            <label class="upload-btn" title="上傳圖片或檔案">
+              📎<input type="file" id="fileInput" accept="image/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv" hidden />
+            </label>
+            <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
+            <button class="send-button" id="sendButton">送出</button>
           </div>
         </div>
       </main>
     </div>
 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>
