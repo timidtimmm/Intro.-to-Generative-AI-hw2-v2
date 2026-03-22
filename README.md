@@ -4,7 +4,7 @@
 
 ---
 
-## 原速影片
+## 原速影片(非常建議觀看)
 
 [Youtube_link](https://youtu.be/tL5YyFkqD6o)
 
