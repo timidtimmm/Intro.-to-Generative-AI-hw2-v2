@@ -399,30 +399,7 @@ http://127.0.0.1:8000/mcp-ui
 
 ---
 
-## 8. Demo Guide
-
-A suggested demo flow:
-
-1. Open the web page and show model selection.
-2. Modify system prompt and API parameters.
-3. Turn streaming on and ask a normal chat question.
-4. Enable auto routing and ask different task types:
-   - coding question
-   - calculation question
-   - weather or date question
-   - web search question
-5. Upload an image and ask the chatbot to analyze it.
-6. Upload a PDF / TXT / DOCX file into the RAG panel.
-7. Ask questions related to the uploaded document and show that the answer uses retrieved context.
-8. Paste a URL into the RAG URL box and ask questions about the webpage.
-9. Turn on long-term memory and demonstrate preference recall.
-10. Open MCP Tools Manager and show available tools / tool logs.
-11. Ask the bot to generate a PowerPoint file and download the `.pptx`.
-12. Demonstrate Agent Mode and show the visible Plan → Route → Tool → Answer process.
-
----
-
-## 9. Main API Endpoints
+## 8. Main API Endpoints
 
 | Category | Method | Endpoint | Description |
 |---|---|---|---|
@@ -452,7 +429,7 @@ A suggested demo flow:
 
 ---
 
-## 10. Implementation Notes
+## 9. Implementation Notes
 
 - The backend normalizes errors into JSON responses for easier frontend handling.
 - Chat history, long-term memory, RAG documents, and RAG chunks are stored in local SQLite.
