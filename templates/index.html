@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HW01 - Your own ChatGPT (NVIDIA NIM)</title>
-    <link rel="stylesheet" href="/static/style.css" />
+    <title>HW02 - Your own ChatGPT (NVIDIA + Gemini)</title>
+    <link rel="stylesheet" href="/static/style.css?v=weatherupload5" />
   </head>
   <body>
     <div class="app-shell">
@@ -14,10 +14,10 @@
         <div class="panel">
 
           <div class="sidebar-top-row">
-            <h1>HW01. ChatGPT</h1>
+            <h1>HW02. ChatGPT</h1>
             <button id="themeToggle" class="theme-btn">☀️ 淺色</button>
           </div>
-          <p class="subtext">NVIDIA NIM + FastAPI + HTML/CSS + JavaScript</p>
+          <p class="subtext">NVIDIA + Gemini · Memory · Tools · Auto-Route · Image / PDF / PPT · RAG</p>
 
           <!-- Session history -->
           <section class="section">
@@ -46,17 +46,21 @@
           <section class="section">
             <label for="model">LLM 模型</label>
             <select id="model">
-              <optgroup label="文字模型">
+              <optgroup label="文字模型（NVIDIA）">
                 <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
                 <option value="openai/gpt-oss-20b">openai/gpt-oss-20b</option>
                 <option value="moonshotai/kimi-k2-instruct">moonshotai/kimi-k2-instruct</option>
               </optgroup>
-              <optgroup label="👁 Vision 模型（支援圖片）">
-                <option value="meta/llama-3.2-11b-vision-instruct">llama-3.2-11b-vision ⭐</option>
+              <optgroup label="Gemini 模型">
+                <option value="gemini/gemini-2.5-flash">gemini-2.5-flash ⭐</option>
+                <option value="gemini/gemini-2.5-pro">gemini-2.5-pro</option>
+              </optgroup>
+              <optgroup label="其他 Vision 模型（備用）">
+                <option value="meta/llama-3.2-11b-vision-instruct">llama-3.2-11b-vision</option>
                 <option value="microsoft/phi-3.5-vision-instruct">phi-3.5-vision</option>
               </optgroup>
             </select>
-            <p id="visionHint" class="vision-hint hidden">👁 此模型支援圖片上傳</p>
+            <p id="visionHint" class="vision-hint">🔀 已啟用自動路由：一般聊天走 NVIDIA / Gemini，圖片與 PDF 走 Gemini，圖片生成走 Gemini Image</p>
           </section>
 
           <!-- System Prompt + Custom Templates -->
@@ -116,6 +120,71 @@
               <div class="row between"><label for="memoryWindow">記憶視窗</label><span id="memoryWindowValue">8</span></div>
               <input id="memoryWindow" type="range" min="2" max="20" step="1" value="8" />
             </div>
+            <div class="toggle-card">
+              <div><strong>🗄️ 長期記憶</strong><p>自動儲存偏好與重要事實</p></div>
+              <input id="longMemory" type="checkbox" checked />
+            </div>
+            <div class="toggle-card">
+              <div><strong>🔀 自動路由</strong><p>依任務切換文字 / Vision / 工具模型</p></div>
+              <input id="autoRoute" type="checkbox" checked />
+            </div>
+            <div class="toggle-card">
+              <div><strong>🔧 工具使用 / MCP</strong><p>搜尋、GitHub Repo、計算器、天氣、圖片生成、簡報輸出</p></div>
+              <input id="toolsEnabled" type="checkbox" checked />
+            </div>
+            <div class="param-row" id="toolIterGroup">
+              <label>🔁 工具最大迴圈次數 <span id="toolMaxIterValue">20</span></label>
+              <input id="toolMaxIter" type="range" min="1" max="20" value="20" />
+            </div>
+            <div class="toggle-card">
+              <div><strong>🧩 Agent 模式</strong><p>顯示 Plan → Route → Tool → Answer 步驟</p></div>
+              <input id="agentMode" type="checkbox" />
+            </div>
+            <div class="toggle-card">
+              <div><strong>🔊 TTS 朗讀</strong><p>回答完成後自動朗讀</p></div>
+              <input id="ttsAuto" type="checkbox" />
+            </div>
+          </section>
+
+          <!-- ★ RAG Document Q&A (NEW) -->
+          <section class="section" id="ragSection">
+            <div class="row between">
+              <label>📄 RAG 文件問答</label>
+              <button id="ragUploadBtn" class="icon-btn" style="font-size:11px">＋ 上傳文件</button>
+            </div>
+            <input type="file" id="ragFileInput"
+              accept=".pdf,.txt,.md,.py,.js,.ts,.json,.csv,.html,.docx"
+              hidden />
+             <div class="row" style="margin-top:6px;gap:6px">
+              <input id="ragUrlInput" type="url"
+                placeholder="或貼上網址直接抓取…"
+                style="flex:1;font-size:12px;padding:6px 10px;border-radius:8px;
+                      border:1px solid var(--line);background:var(--input-bg);color:var(--text)" />
+              <button id="ragUrlBtn" class="icon-btn" style="font-size:11px;white-space:nowrap">🌐 抓取</button>
+            </div>
+            <div id="ragDocList" class="rag-doc-list"> 
+              <div class="empty-small">尚無文件，上傳後可以直接問答。</div>
+            </div>
+            <div class="toggle-card" style="margin-top:8px">
+              <div><strong>📄 RAG 注入</strong><p>回答前自動檢索相關文件片段</p></div>
+              <input id="ragEnabled" type="checkbox" checked />
+            </div>
+            <div id="ragStatus" class="rag-status hidden"></div>
+          </section>
+
+          <!-- HW2 Memory / Tools panels -->
+          <section class="section">
+            <div class="row between">
+              <label>🗄️ 長期記憶庫</label>
+              <button id="refreshMemBtn" class="icon-btn" style="font-size:11px">重新整理</button>
+            </div>
+            <div id="memoryList" class="memory-list"></div>
+          </section>
+
+          <section class="section">
+            <label>🔧 可用工具</label>
+            <a class="secondary" href="/mcp-ui" target="_blank" style="display:block;text-align:center;text-decoration:none;margin:8px 0;padding:8px;border-radius:8px">🧩 開啟 MCP Tools Manager</a>
+            <div id="toolsList" class="tools-list"></div>
           </section>
 
           <!-- Actions -->
@@ -123,10 +192,12 @@
             <div class="action-buttons">
               <button class="danger" id="clearChat">清空對話</button>
               <button class="secondary" id="stopStreaming">停止生成</button>
+              <button class="secondary" id="shareChat">分享對話</button>
             </div>
+            <div id="shareResult" class="share-result hidden"></div>
           </section>
 
-          <div class="note-box">NVIDIA API key 只放在後端 <code>.env</code>，不要放在前端。</div>
+          <div class="note-box">請在後端 <code>.env</code> 設定 <code>NVIDIA_API_KEY</code> 與 <code>GEMINI_API_KEY</code>；前端不要暴露 API key。</div>
         </div>
       </aside>
 
@@ -140,9 +211,11 @@
           <div class="badge-group">
             <span class="badge" id="streamingBadge">Streaming On</span>
             <span class="badge" id="memoryBadge">Memory 8</span>
+            <span class="badge" id="longMemoryBadge">Long Memory On</span>
+            <span class="badge route-badge" id="routeBadge">🔀 Auto Route</span>
+            <span class="badge hidden" id="ragBadge">📄 RAG On</span>
             <span class="badge hidden" id="thinkingBadge">🧠 Thinking</span>
             <span class="badge hidden token-badge" id="tokenBadge">↑0 ↓0 tok</span>
-            <!-- Chart toggle button -->
             <button id="chartToggle" class="chart-toggle-btn">📊 Token 圖表</button>
           </div>
         </div>
@@ -162,9 +235,8 @@
           <label for="chatInput">Message</label>
           <textarea id="chatInput" placeholder="輸入訊息，按 Enter 傳送，Shift + Enter 換行"></textarea>
           <div class="composer-actions">
-            <label class="upload-btn" title="上傳圖片或檔案">
-              📎<input type="file" id="fileInput" accept="image/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv" hidden />
-            </label>
+            <button type="button" id="uploadButton" class="upload-btn" title="上傳圖片或檔案">📎</button>
+            <input type="file" id="fileInput" accept="image/*,.pdf,.txt,.md,.py,.js,.ts,.json,.csv" hidden />
             <button id="voiceBtn" class="voice-btn" title="語音輸入">🎤</button>
             <button class="send-button" id="sendButton">送出</button>
           </div>
@@ -175,6 +247,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v=weatherupload5"></script>
   </body>
 </html>

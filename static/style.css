@@ -264,3 +264,91 @@ button:disabled { opacity:.45; cursor:not-allowed; }
   .chat-header{flex-direction:column;align-items:flex-start}
   .message-bubble{max-width:100%}
 }
+
+/* ══ HW2 memory / routing / tool panels ═════════════════════════════════════ */
+.badge.muted { opacity:.55; }
+.route-badge { background:color-mix(in srgb,var(--accent) 14%,transparent); }
+.memory-list,.tools-list { display:flex; flex-direction:column; gap:6px; max-height:180px; overflow:auto; }
+.empty-small { font-size:12px; color:var(--subtext); padding:5px 0; }
+.memory-item,.tool-item { display:flex; align-items:center; gap:7px; padding:7px 8px; border:1px solid var(--line); border-radius:9px; background:var(--panel-2); font-size:12px; }
+.memory-tag { flex-shrink:0; padding:1px 6px; border-radius:999px; background:color-mix(in srgb,var(--accent) 16%,transparent); color:var(--accent); font-size:10px; text-transform:uppercase; }
+.memory-content { flex:1; min-width:0; color:var(--subtext); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.memory-delete { border:none; background:none; color:var(--subtext); cursor:pointer; font-size:12px; }
+.memory-delete:hover { color:var(--error); }
+.tool-name { flex:1; font-family:monospace; color:var(--text); }
+.tool-risk { padding:1px 6px; border-radius:999px; font-size:10px; color:var(--accent); background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.tool-risk.medium { color:#f59e0b; background:rgba(245,158,11,.12); }
+.tool-events { margin-top:8px; padding:7px 9px; border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); border-radius:9px; background:color-mix(in srgb,var(--accent) 7%,transparent); color:var(--subtext); font-size:12px; }
+.tool-events code { color:var(--accent); }
+.tool-iter-badge { display:inline-block; margin-top:6px; padding:3px 9px; border-radius:20px; background:color-mix(in srgb,var(--accent) 12%,transparent); color:var(--accent); font-size:11px; font-weight:600; }
+.param-row { display:flex; flex-direction:column; gap:4px; padding:8px 0; }
+.param-row label { font-size:12px; color:var(--subtext); display:flex; justify-content:space-between; }
+.param-row input[type=range] { width:100%; }
+
+/* Generated image returned by image-generation tool */
+.generated-image {
+  display: block;
+  max-width: min(100%, 640px);
+  max-height: 640px;
+  object-fit: contain;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  margin: 10px 0;
+  box-shadow: 0 10px 28px rgba(0,0,0,.12);
+}
+
+
+/* HW2 upload routing fix: upload is always available; backend auto-routes attachments. */
+.upload-btn {
+  opacity: 1 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+.upload-btn.disabled,
+.upload-btn[disabled] {
+  opacity: 1 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+
+/* HW2 feature-plus: Agent steps, TTS/share controls */
+.agent-steps { margin-top:8px; padding:9px 10px; border:1px solid color-mix(in srgb,var(--accent) 28%,transparent); border-radius:12px; background:color-mix(in srgb,var(--accent) 8%,transparent); }
+.agent-title { font-weight:700; color:var(--accent); margin-bottom:7px; font-size:12px; }
+.agent-step { display:flex; align-items:flex-start; gap:8px; padding:5px 0; border-top:1px solid color-mix(in srgb,var(--accent) 14%,transparent); }
+.agent-step:first-of-type { border-top:0; }
+.agent-dot { width:20px; height:20px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:white; font-size:11px; flex:0 0 auto; }
+.agent-step b { font-size:12px; color:var(--text); }
+.agent-step p { font-size:12px; color:var(--subtext); margin:1px 0 0; }
+.share-result { margin-top:8px; padding:8px; border:1px solid var(--line); border-radius:10px; background:var(--panel-2); font-size:12px; word-break:break-all; }
+.share-result.hidden { display:none; }
+.share-result a { color:var(--accent); }
+.mini-copy { margin-left:6px; padding:2px 7px; border:1px solid var(--line); border-radius:999px; background:var(--btn-bg); color:var(--text); cursor:pointer; }
+
+/* HW2 upload fix: upload button must never be visually disabled by model selection. */
+.upload-btn { opacity: 1 !important; cursor: pointer !important; pointer-events: auto !important; }
+.upload-btn:disabled { opacity: 1 !important; cursor: pointer !important; pointer-events: auto !important; }
+
+/* ══ RAG Document Manager ════════════════════════════════════════════════════ */
+.rag-doc-list { display:flex; flex-direction:column; gap:5px; max-height:160px; overflow-y:auto; margin-top:6px; }
+.rag-doc-item { display:flex; align-items:center; gap:6px; padding:6px 8px; border:1px solid var(--line); border-radius:9px; background:var(--panel-2); font-size:12px; }
+.rag-doc-icon { flex-shrink:0; font-size:14px; }
+.rag-doc-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text); }
+.rag-doc-meta { flex-shrink:0; color:var(--subtext); font-size:10px; white-space:nowrap; }
+.rag-doc-del { background:none; border:none; color:var(--subtext); cursor:pointer; font-size:11px; padding:2px 4px; border-radius:4px; flex-shrink:0; }
+.rag-doc-del:hover { color:var(--error); background:var(--error-bg); }
+.rag-status { margin-top:6px; padding:6px 10px; border-radius:8px; font-size:12px; background:var(--note-bg); color:var(--note-text); border:1px solid color-mix(in srgb,var(--accent) 25%,transparent); }
+.rag-status.error { background:var(--error-bg); color:var(--error); border-color:color-mix(in srgb,var(--danger) 30%,transparent); }
+/* style.css 加入 */
+@keyframes routeFlash {
+    0%   { 
+        background: color-mix(in srgb, var(--accent) 50%, transparent); 
+        transform: scale(1.1); 
+        box-shadow: 0 0 8px var(--accent);
+    }
+    100% { 
+        background: color-mix(in srgb, var(--accent) 14%, transparent); 
+        transform: scale(1);
+        box-shadow: none;
+    }
+}

@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MCP Tools Manager</title>
+<style>
+/* ── Reset & Variables ── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0f11;--panel:#18181b;--panel2:#1f1f23;--border:#2a2a30;
+  --text:#e8e8ec;--sub:#808090;--accent:#7c6aff;--accent2:#5b4fd8;
+  --green:#22c55e;--red:#ef4444;--yellow:#f59e0b;--blue:#3b82f6;
+  --card:#1c1c21;--radius:12px;--shadow:0 4px 24px rgba(0,0,0,.4);
+}
+[data-theme="light"]{
+  --bg:#f1f1f5;--panel:#fff;--panel2:#f5f5f8;--border:#d4d4dc;
+  --text:#1a1a2e;--sub:#6b7280;--card:#fff;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+body{font-family:'Inter','Noto Sans TC',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+button{font:inherit;cursor:pointer;border:none;border-radius:8px;transition:.15s}
+input,select,textarea{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+code{font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px}
+
+/* ── Layout ── */
+.shell{display:grid;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar h1{font-size:16px;font-weight:700}
+.topbar h1 span{color:var(--accent)}
+.topbar .spacer{flex:1}
+.status-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse2 2s infinite}
+@keyframes pulse2{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.4)}50%{opacity:.8;box-shadow:0 0 0 4px rgba(34,197,94,0)}}
+
+.body{display:grid;grid-template-columns:280px 1fr 300px;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{background:var(--panel);border-right:1px solid var(--border);overflow-y:auto;padding:16px 12px;display:flex;flex-direction:column;gap:6px}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--sub);font-size:13px;transition:.12s}
+.nav-item:hover{background:var(--panel2);color:var(--text)}
+.nav-item.active{background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent);font-weight:600}
+.nav-item .icon{font-size:16px;width:22px;text-align:center}
+.nav-sep{height:1px;background:var(--border);margin:8px 4px}
+.nav-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--sub);padding:4px 12px;font-weight:600}
+
+/* ── Main ── */
+.main{overflow-y:auto;padding:20px}
+.page{display:none}
+.page.active{display:block}
+
+/* ── Cards & Sections ── */
+.section-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.section-sub{color:var(--sub);font-size:13px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card-title{font-weight:600;font-size:13px;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+
+/* ── Stats Grid ── */
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;text-align:center}
+.stat-num{font-size:28px;font-weight:800;color:var(--accent)}
+.stat-label{font-size:12px;color:var(--sub);margin-top:2px}
+
+/* ── Tool Grid ── */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.tool-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px;transition:.2s}
+.tool-card:hover{border-color:var(--accent);box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+.tool-card.disabled{opacity:.55;filter:grayscale(.6)}
+.tool-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tool-icon{font-size:22px;width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px}
+.tool-name{font-weight:700;font-size:14px}
+.tool-category{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub)}
+.tool-desc{font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:12px}
+.tool-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;gap:4px}
+.badge-risk-low{background:rgba(34,197,94,.12);color:var(--green)}
+.badge-risk-medium{background:rgba(245,158,11,.12);color:var(--yellow)}
+.badge-risk-high{background:rgba(239,68,68,.12);color:var(--red)}
+.badge-cat{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.tool-actions{display:flex;gap:8px}
+.btn{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid transparent;transition:.14s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:var(--accent2)}
+.btn-ghost{background:var(--panel2);color:var(--text);border-color:var(--border)}
+.btn-ghost:hover{background:var(--border)}
+.btn-danger{background:rgba(239,68,68,.12);color:var(--red);border-color:rgba(239,68,68,.2)}
+.btn-danger:hover{background:rgba(239,68,68,.2)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.toggle-btn{position:relative;width:40px;height:22px;border-radius:11px;background:var(--border);cursor:pointer;transition:.2s;border:none;flex-shrink:0}
+.toggle-btn.on{background:var(--accent)}
+.toggle-btn::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s}
+.toggle-btn.on::after{left:21px}
+
+/* ── Test Panel ── */
+.test-panel{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:12px;display:none}
+.test-panel.open{display:block}
+.param-field{margin-bottom:10px}
+.param-label{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:4px;display:flex;justify-content:space-between}
+.param-type{font-size:10px;background:var(--panel);padding:1px 5px;border-radius:4px}
+.test-result{margin-top:12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px;max-height:300px;overflow:auto}
+.test-result pre{font-size:11px;white-space:pre-wrap;word-break:break-word;line-height:1.6}
+.result-ok{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.05)}
+.result-err{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.05)}
+.result-latency{font-size:11px;color:var(--sub);margin-top:6px}
+
+/* ── Logs ── */
+.log-table{width:100%;border-collapse:collapse}
+.log-table th{text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--sub);border-bottom:1px solid var(--border)}
+.log-table td{padding:9px 12px;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);font-size:12px;vertical-align:top}
+.log-table tr:hover td{background:var(--panel2)}
+.status-ok{color:var(--green);font-weight:600}
+.status-err{color:var(--red);font-weight:600}
+.log-args{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.log-args:hover{white-space:normal;word-break:break-all}
+.log-tool{font-weight:600;color:var(--accent)}
+.log-ts{color:var(--sub)}
+.ms-badge{background:color-mix(in srgb,var(--accent) 10%,transparent);color:var(--accent);padding:1px 6px;border-radius:4px;font-size:10px}
+
+/* ── SSE Panel (right sidebar) ── */
+.sse-panel{background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sse-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.sse-title{font-weight:700;font-size:13px}
+.sse-stream{flex:1;overflow-y:auto;padding:10px}
+.sse-item{font-size:11px;padding:8px 10px;border-radius:8px;margin-bottom:6px;background:var(--panel2);border:1px solid var(--border)}
+.sse-item.tool_call{border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.sse-item.err{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05)}
+.sse-time{color:var(--sub);margin-bottom:2px}
+.sse-empty{color:var(--sub);text-align:center;padding:40px 20px;font-size:13px}
+
+/* ── Schema Viewer ── */
+.schema-block{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px;font-size:11px}
+.schema-block pre{white-space:pre-wrap;word-break:break-word}
+
+/* ── Config page ── */
+.form-row{margin-bottom:14px}
+.form-label{font-size:12px;font-weight:600;color:var(--sub);margin-bottom:5px;display:block}
+.form-hint{font-size:11px;color:var(--sub);margin-top:4px}
+.copy-row{display:flex;gap:8px}
+.copy-row input{flex:1}
+
+/* ── Filters ── */
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:5px 12px;border-radius:999px;font-size:12px;background:var(--panel2);border:1px solid var(--border);cursor:pointer;color:var(--sub)}
+.filter-btn.active{background:color-mix(in srgb,var(--accent) 15%,transparent);border-color:var(--accent);color:var(--accent);font-weight:600}
+.search-input{flex:1;min-width:200px;max-width:300px}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+
+/* ── Responsive ── */
+@media(max-width:1024px){.body{grid-template-columns:220px 1fr 260px}}
+@media(max-width:768px){.body{grid-template-columns:1fr};.sse-panel{display:none};.stats-grid{grid-template-columns:1fr 1fr}}
+
+/* ── Theme toggle ── */
+.theme-toggle{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:13px;color:var(--text)}
+.theme-toggle:hover{background:var(--border)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <h1>🔌 <span>MCP</span> Tools Manager</h1>
+    <div class="spacer"></div>
+    <div class="status-dot" id="sseDot" title="SSE connection"></div>
+    <span id="sseStatus" style="font-size:12px;color:var(--sub)">Connecting…</span>
+    <button class="theme-toggle" onclick="toggleTheme()">🌙 Theme</button>
+    <a href="/" style="text-decoration:none"><button class="btn btn-ghost" style="font-size:12px">← Back to Chat</button></a>
+  </div>
+
+  <div class="body">
+    <!-- Left Nav -->
+    <nav class="sidebar">
+      <div class="nav-label">Overview</div>
+      <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard',this)">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-label">Tools</div>
+      <div class="nav-item" data-page="all-tools" onclick="navigate('all-tools',this)">
+        <span class="icon">🔧</span> All Tools
+      </div>
+      <div class="nav-item" data-page="test" onclick="navigate('test',this)">
+        <span class="icon">🧪</span> Test Tools
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-label">Monitor</div>
+      <div class="nav-item" data-page="logs" onclick="navigate('logs',this)">
+        <span class="icon">📋</span> Call Logs
+      </div>
+      <div class="nav-sep"></div>
+      <div class="nav-label">Settings</div>
+      <div class="nav-item" data-page="config" onclick="navigate('config',this)">
+        <span class="icon">⚙️</span> Configuration
+      </div>
+      <div class="nav-item" data-page="schema" onclick="navigate('schema',this)">
+        <span class="icon">📄</span> API Schema
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main">
+
+      <!-- Dashboard -->
+      <div class="page active" id="page-dashboard">
+        <div class="section-title">Dashboard</div>
+        <div class="section-sub">MCP Server overview & real-time health</div>
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card"><div class="stat-num" id="statTotal">–</div><div class="stat-label">Total Tools</div></div>
+          <div class="stat-card"><div class="stat-num" id="statEnabled">–</div><div class="stat-label">Enabled</div></div>
+          <div class="stat-card"><div class="stat-num" id="statCalls">–</div><div class="stat-label">Total Calls</div></div>
+          <div class="stat-card"><div class="stat-num" id="statErrors">–</div><div class="stat-label">Errors</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🔌 Server Info</div>
+          <table style="width:100%;font-size:13px;border-collapse:collapse">
+            <tr><td style="padding:5px 0;color:var(--sub);width:160px">Endpoint</td><td><code id="infoEndpoint">–</code></td></tr>
+            <tr><td style="padding:5px 0;color:var(--sub)">Protocol</td><td><code id="infoProtocol">–</code></td></tr>
+            <tr><td style="padding:5px 0;color:var(--sub)">SSE Subscribers</td><td id="infoSubs">–</td></tr>
+            <tr><td style="padding:5px 0;color:var(--sub)">Server Time</td><td id="infoTime">–</td></tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⚡ Recent Calls (last 5)</div>
+          <div id="recentCalls"><div style="color:var(--sub);font-size:13px">No calls yet…</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🗂 Tools by Category</div>
+          <div id="categoryChart" style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px"></div>
+        </div>
+      </div>
+
+      <!-- All Tools -->
+      <div class="page" id="page-all-tools">
+        <div class="section-title">All Tools</div>
+        <div class="section-sub">Manage, enable/disable, and inspect MCP tools</div>
+        <div class="filter-bar">
+          <input class="search-input" placeholder="Search tools…" id="toolSearch" oninput="filterTools()" />
+          <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+          <button class="filter-btn" data-filter="enabled" onclick="setFilter('enabled',this)">Enabled</button>
+          <button class="filter-btn" data-filter="disabled" onclick="setFilter('disabled',this)">Disabled</button>
+          <button class="filter-btn" data-filter="information" onclick="setFilter('information',this)">Information</button>
+          <button class="filter-btn" data-filter="utility" onclick="setFilter('utility',this)">Utility</button>
+          <button class="filter-btn" data-filter="developer" onclick="setFilter('developer',this)">Developer</button>
+          <button class="filter-btn" data-filter="productivity" onclick="setFilter('productivity',this)">Productivity</button>
+          <button class="filter-btn" data-filter="media" onclick="setFilter('media',this)">Media</button>
+        </div>
+        <div class="tool-grid" id="toolGrid"></div>
+      </div>
+
+      <!-- Test Tools -->
+      <div class="page" id="page-test">
+        <div class="section-title">Test Tools</div>
+        <div class="section-sub">Invoke tools directly and inspect results</div>
+        <div class="card">
+          <div class="form-row">
+            <label class="form-label">Select Tool</label>
+            <select id="testToolSelect" onchange="loadTestForm()">
+              <option value="">— Choose a tool —</option>
+            </select>
+          </div>
+          <div id="testForm"></div>
+        </div>
+      </div>
+
+      <!-- Logs -->
+      <div class="page" id="page-logs">
+        <div class="section-title">Call Logs</div>
+        <div class="section-sub">History of all MCP tool invocations</div>
+        <div style="display:flex;justify-content:flex-end;margin-bottom:12px;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="loadLogs()">🔄 Refresh</button>
+          <button class="btn btn-danger btn-sm" onclick="clearLogs()">🗑 Clear Logs</button>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="log-table" id="logTable">
+            <thead><tr>
+              <th>Tool</th><th>Status</th><th>Latency</th><th>Args</th><th>Time</th>
+            </tr></thead>
+            <tbody id="logBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Config -->
+      <div class="page" id="page-config">
+        <div class="section-title">Configuration</div>
+        <div class="section-sub">MCP server endpoints and integration settings</div>
+
+        <div class="card">
+          <div class="card-title">📡 MCP Endpoints</div>
+          <div class="form-row">
+            <label class="form-label">JSON-RPC Endpoint</label>
+            <div class="copy-row">
+              <input id="cfgRpc" readonly />
+              <button class="btn btn-ghost btn-sm" onclick="copyField('cfgRpc')">Copy</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">SSE Stream Endpoint</label>
+            <div class="copy-row">
+              <input id="cfgSse" readonly />
+              <button class="btn btn-ghost btn-sm" onclick="copyField('cfgSse')">Copy</button>
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="form-label">Tools REST Endpoint</label>
+            <div class="copy-row">
+              <input id="cfgTools" readonly />
+              <button class="btn btn-ghost btn-sm" onclick="copyField('cfgTools')">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">🧩 Claude Desktop Config (claude_desktop_config.json)</div>
+          <div class="schema-block">
+            <pre id="desktopConfig"></pre>
+          </div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="copyField('desktopConfig',true)">📋 Copy Config</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📦 MCP SDK Integration Example</div>
+          <div class="schema-block">
+            <pre id="sdkExample"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schema -->
+      <div class="page" id="page-schema">
+        <div class="section-title">API Schema</div>
+        <div class="section-sub">JSON-RPC method reference for MCP integration</div>
+
+        <div class="card">
+          <div class="card-title">JSON-RPC Methods</div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <tr style="border-bottom:1px solid var(--border)">
+              <th style="text-align:left;padding:8px;color:var(--sub)">Method</th>
+              <th style="text-align:left;padding:8px;color:var(--sub)">Description</th>
+              <th style="text-align:left;padding:8px;color:var(--sub)">Params</th>
+            </tr>
+            ${[
+              ["tools/list","List all registered tools","—"],
+              ["tools/call","Invoke a tool","name, arguments"],
+              ["tools/toggle","Enable/disable a tool","name, enabled"],
+              ["logs/list","Get call log entries","limit?"],
+              ["logs/clear","Clear all logs","—"],
+              ["server/info","Get server metadata","—"],
+              ["ping","Health check","—"],
+            ].map(([m,d,p])=>`<tr style="border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent)"><td style="padding:8px;font-family:monospace;color:var(--accent)">${m}</td><td style="padding:8px">${d}</td><td style="padding:8px;color:var(--sub)">${p}</td></tr>`).join('')}
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Example: tools/call</div>
+          <div class="schema-block"><pre>// Request
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "calculator",
+    "arguments": { "expression": "2 * (3 + 4)" }
+  }
+}
+
+// Response
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [{"type": "text", "text": "{\"result\": 14}"}],
+    "isError": false,
+    "_latency_ms": 0.4
+  }
+}</pre></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Complete OpenAPI-like Tool Definitions</div>
+          <div class="schema-block" style="max-height:400px;overflow:auto">
+            <pre id="fullSchema">Loading…</pre>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+
+    <!-- SSE Event Stream Panel -->
+    <div class="sse-panel">
+      <div class="sse-header">
+        <span class="sse-title">⚡ Live Events</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearSseStream()">Clear</button>
+      </div>
+      <div class="sse-stream" id="sseStream">
+        <div class="sse-empty">Waiting for events…<br><small>Tool calls appear here in real-time</small></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+let tools = [];
+let allLogs = [];
+let currentFilter = 'all';
+let searchQuery = '';
+let sseEvents = [];
+const BASE = window.location.origin;
+let isDark = true;
+
+// ── Navigation ─────────────────────────────────────────────────────────────
+function navigate(page, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  if (el) el.classList.add('active');
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+  if (page === 'logs') loadLogs();
+  if (page === 'dashboard') loadDashboard();
+  if (page === 'schema') loadSchema();
+  if (page === 'config') loadConfig();
+}
+
+// ── Theme ──────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  isDark = !isDark;
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+}
+
+// ── Fetch helpers ──────────────────────────────────────────────────────────
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(BASE + path, opts);
+  return r.json();
+}
+
+// ── SSE Connection ─────────────────────────────────────────────────────────
+function connectSSE() {
+  const es = new EventSource(BASE + '/mcp/sse');
+  const dot = document.getElementById('sseDot');
+  const status = document.getElementById('sseStatus');
+
+  es.onopen = () => {
+    dot.style.background = 'var(--green)';
+    status.textContent = 'Connected';
+  };
+  es.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      addSseEvent(data);
+      if (data.type === 'tool_call') {
+        refreshStats();
+        if (document.getElementById('page-logs').classList.contains('active')) loadLogs();
+      }
+    } catch {}
+  };
+  es.onerror = () => {
+    dot.style.background = 'var(--red)';
+    status.textContent = 'Reconnecting…';
+    setTimeout(connectSSE, 3000);
+  };
+}
+
+function addSseEvent(data) {
+  const stream = document.getElementById('sseStream');
+  const empty = stream.querySelector('.sse-empty');
+  if (empty) empty.remove();
+
+  const item = document.createElement('div');
+  item.className = 'sse-item ' + (data.type || '');
+  const ts = new Date().toLocaleTimeString();
+  
+  let content = '';
+  if (data.type === 'tool_call') {
+    const st = data.data?.status === 'ok' ? '✅' : '❌';
+    content = `<div class="sse-time">${ts}</div><div><b>${st} ${data.data?.tool || ''}</b> <span style="color:var(--sub)">${data.data?.duration_ms || 0}ms</span></div>`;
+  } else if (data.type === 'tool_toggled') {
+    content = `<div class="sse-time">${ts}</div><div>${data.enabled ? '✅' : '🔕'} <b>${data.tool}</b> ${data.enabled ? 'enabled' : 'disabled'}</div>`;
+  } else if (data.type === 'connected') {
+    content = `<div class="sse-time">${ts}</div><div>🔌 SSE connected <code style="font-size:10px">${data.sid?.slice(0,8)}</code></div>`;
+  } else {
+    content = `<div class="sse-time">${ts}</div><div>${JSON.stringify(data).slice(0,120)}</div>`;
+  }
+
+  item.innerHTML = content;
+  stream.insertBefore(item, stream.firstChild);
+  sseEvents.push(data);
+  if (stream.children.length > 50) stream.lastChild.remove();
+}
+
+function clearSseStream() {
+  document.getElementById('sseStream').innerHTML = '<div class="sse-empty">Cleared — waiting for events…</div>';
+  sseEvents = [];
+}
+
+// ── Load Tools ─────────────────────────────────────────────────────────────
+async function loadTools() {
+  const data = await api('/mcp/tools');
+  tools = data.tools || [];
+  renderToolGrid();
+  populateTestSelect();
+}
+
+function renderToolGrid() {
+  const grid = document.getElementById('toolGrid');
+  const search = (document.getElementById('toolSearch')?.value || '').toLowerCase();
+  const filtered = tools.filter(t => {
+    if (currentFilter === 'enabled' && !t.enabled) return false;
+    if (currentFilter === 'disabled' && t.enabled) return false;
+    if (!['all','enabled','disabled'].includes(currentFilter) && t.category !== currentFilter) return false;
+    if (search && !t.name.includes(search) && !t.description.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  grid.innerHTML = '';
+  if (!filtered.length) {
+    grid.innerHTML = '<div style="color:var(--sub);grid-column:1/-1;text-align:center;padding:40px">No tools found</div>';
+    return;
+  }
+
+  filtered.forEach(tool => {
+    const card = document.createElement('div');
+    card.className = 'tool-card' + (tool.enabled ? '' : ' disabled');
+    card.id = 'tc-' + tool.name;
+    card.innerHTML = `
+      <div class="tool-header">
+        <div class="tool-icon">${tool.icon || '🔧'}</div>
+        <div>
+          <div class="tool-name">${tool.name}</div>
+          <div class="tool-category">${tool.category || 'general'}</div>
+        </div>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--sub)" id="stat-${tool.name}">${tool.call_count || 0} calls</span>
+          <button class="toggle-btn ${tool.enabled ? 'on' : ''}" id="tog-${tool.name}" onclick="toggleTool('${tool.name}', this)" title="${tool.enabled ? 'Disable' : 'Enable'}"></button>
+        </div>
+      </div>
+      <div class="tool-desc">${tool.description || ''}</div>
+      <div class="tool-meta">
+        <span class="badge badge-risk-${tool.risk_level || 'low'}">⚡ ${tool.risk_level || 'low'} risk</span>
+        <span class="badge badge-cat">${tool.category || 'general'}</span>
+        ${tool.avg_latency_ms > 0 ? `<span class="badge" style="background:var(--panel2);color:var(--sub)">⏱ avg ${tool.avg_latency_ms}ms</span>` : ''}
+        ${tool.error_count > 0 ? `<span class="badge badge-risk-medium">⚠️ ${tool.error_count} errors</span>` : ''}
+      </div>
+      <div class="tool-actions">
+        <button class="btn btn-primary btn-sm" onclick="openTestFor('${tool.name}')">▶ Test</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleTestPanel('${tool.name}')">⚙ Args</button>
+      </div>
+      <div class="test-panel" id="tp-${tool.name}">
+        <div id="tpf-${tool.name}"></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="runInline('${tool.name}')">▶ Run Tool</button>
+        <div id="tpr-${tool.name}" style="display:none" class="test-result"></div>
+      </div>
+    `;
+    grid.appendChild(card);
+    buildInlineForm(tool);
+  });
+}
+
+function buildInlineForm(tool) {
+  const container = document.getElementById('tpf-' + tool.name);
+  if (!container) return;
+  const props = (tool.parameters?.properties) || {};
+  const required = tool.parameters?.required || [];
+  container.innerHTML = '';
+  Object.entries(props).forEach(([key, schema]) => {
+    const isReq = required.includes(key);
+    const div = document.createElement('div');
+    div.className = 'param-field';
+    div.innerHTML = `
+      <div class="param-label">
+        ${key}${isReq ? ' <span style="color:var(--red)">*</span>' : ''}
+        <span class="param-type">${schema.type || 'any'}</span>
+      </div>
+      ${schema.enum
+        ? `<select id="ip-${tool.name}-${key}">${schema.enum.map(v=>`<option>${v}</option>`).join('')}</select>`
+        : schema.type === 'integer' || schema.type === 'number'
+          ? `<input type="number" id="ip-${tool.name}-${key}" placeholder="${schema.description || key}" value="${schema.default ?? ''}" />`
+          : `<input type="text" id="ip-${tool.name}-${key}" placeholder="${schema.description || key}" value="${schema.default ?? ''}" />`
+      }
+    `;
+    container.appendChild(div);
+  });
+  if (!Object.keys(props).length) {
+    container.innerHTML = '<div style="color:var(--sub);font-size:12px">No parameters required</div>';
+  }
+}
+
+async function runInline(name) {
+  const tool = tools.find(t => t.name === name);
+  if (!tool) return;
+  const args = gatherArgs(name, tool.parameters?.properties || {});
+  const resultEl = document.getElementById('tpr-' + name);
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="color:var(--sub)">Running…</div>';
+  resultEl.className = 'test-result';
+  try {
+    const data = await api('/mcp/tools/' + name + '/invoke', 'POST', { args });
+    const isErr = data.status === 'error' || data.result?.error;
+    resultEl.className = 'test-result ' + (isErr ? 'result-err' : 'result-ok');
+    resultEl.innerHTML = `<pre>${JSON.stringify(data.result, null, 2)}</pre><div class="result-latency">⏱ ${data.duration_ms}ms</div>`;
+  } catch (e) {
+    resultEl.className = 'test-result result-err';
+    resultEl.innerHTML = `<pre>Error: ${e.message}</pre>`;
+  }
+}
+
+function gatherArgs(toolName, props) {
+  const args = {};
+  Object.keys(props).forEach(key => {
+    const el = document.getElementById(`ip-${toolName}-${key}`);
+    if (!el) return;
+    const v = el.value.trim();
+    if (!v) return;
+    const type = props[key].type;
+    if (type === 'integer') args[key] = parseInt(v);
+    else if (type === 'number') args[key] = parseFloat(v);
+    else args[key] = v;
+  });
+  return args;
+}
+
+function toggleTestPanel(name) {
+  const panel = document.getElementById('tp-' + name);
+  if (panel) panel.classList.toggle('open');
+}
+
+async function toggleTool(name, btn) {
+  const enabled = !btn.classList.contains('on');
+  btn.classList.toggle('on', enabled);
+  const card = document.getElementById('tc-' + name);
+  if (card) card.classList.toggle('disabled', !enabled);
+  await api('/mcp/tools/' + name + '/toggle', 'POST', { enabled });
+  await loadTools();
+  await refreshStats();
+}
+
+function setFilter(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  renderToolGrid();
+}
+
+function filterTools() {
+  renderToolGrid();
+}
+
+// ── Test Page ──────────────────────────────────────────────────────────────
+function populateTestSelect() {
+  const sel = document.getElementById('testToolSelect');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Choose a tool —</option>';
+  tools.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.name; opt.textContent = `${t.icon || '🔧'} ${t.name}`;
+    sel.appendChild(opt);
+  });
+  if (prev) { sel.value = prev; loadTestForm(); }
+}
+
+function openTestFor(name) {
+  navigate('test', document.querySelector('[data-page="test"]'));
+  document.getElementById('testToolSelect').value = name;
+  loadTestForm();
+}
+
+function loadTestForm() {
+  const name = document.getElementById('testToolSelect')?.value;
+  const container = document.getElementById('testForm');
+  if (!name || !container) return;
+  const tool = tools.find(t => t.name === name);
+  if (!tool) return;
+  const props = tool.parameters?.properties || {};
+  const required = tool.parameters?.required || [];
+
+  container.innerHTML = `
+    <div class="card-title" style="margin-bottom:14px">${tool.icon || '🔧'} ${tool.name}</div>
+    <div style="color:var(--sub);font-size:12px;margin-bottom:14px">${tool.description || ''}</div>
+    <div id="mainFormFields"></div>
+    <div style="margin-top:4px;margin-bottom:12px">
+      <label class="form-label">Raw JSON Args (override above)</label>
+      <textarea id="rawArgs" style="height:80px;font-family:monospace;font-size:12px" placeholder='{"key": "value"}'></textarea>
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="runTest()">▶ Run Tool</button>
+    <div id="testResult" style="margin-top:14px;display:none" class="test-result"></div>
+  `;
+
+  const fields = document.getElementById('mainFormFields');
+  Object.entries(props).forEach(([key, schema]) => {
+    const isReq = required.includes(key);
+    const div = document.createElement('div');
+    div.className = 'form-row';
+    div.innerHTML = `
+      <label class="form-label">${key}${isReq ? ' <span style="color:var(--red)">*</span>' : ''} <span style="float:right;font-size:10px;color:var(--sub)">${schema.type || 'any'}</span></label>
+      ${schema.enum
+        ? `<select id="tf-${key}">${schema.enum.map(v=>`<option value="${v}" ${v===(schema.default||schema.enum[0])?'selected':''}>${v}</option>`).join('')}</select>`
+        : schema.type === 'integer' || schema.type === 'number'
+          ? `<input type="number" id="tf-${key}" placeholder="${schema.description || key}" value="${schema.default ?? ''}" />`
+          : `<input type="text" id="tf-${key}" placeholder="${schema.description || key}" value="${schema.default ?? ''}" />`
+      }
+      ${schema.description ? `<div class="form-hint">${schema.description}</div>` : ''}
+    `;
+    fields.appendChild(div);
+  });
+  if (!Object.keys(props).length) {
+    fields.innerHTML = '<div style="color:var(--sub);font-size:12px;margin-bottom:10px">This tool takes no parameters.</div>';
+  }
+}
+
+async function runTest() {
+  const name = document.getElementById('testToolSelect')?.value;
+  if (!name) return;
+  const tool = tools.find(t => t.name === name);
+  if (!tool) return;
+
+  let args = {};
+  const rawEl = document.getElementById('rawArgs');
+  if (rawEl?.value.trim()) {
+    try { args = JSON.parse(rawEl.value); }
+    catch { alert('Invalid JSON in raw args'); return; }
+  } else {
+    const props = tool.parameters?.properties || {};
+    Object.keys(props).forEach(key => {
+      const el = document.getElementById('tf-' + key);
+      if (!el) return;
+      const v = el.value.trim();
+      if (!v) return;
+      const type = props[key].type;
+      if (type === 'integer') args[key] = parseInt(v);
+      else if (type === 'number') args[key] = parseFloat(v);
+      else args[key] = v;
+    });
+  }
+
+  const resultEl = document.getElementById('testResult');
+  resultEl.style.display = 'block';
+  resultEl.innerHTML = '<div style="color:var(--sub)">⏳ Running…</div>';
+  resultEl.className = 'test-result';
+
+  const t0 = Date.now();
+  try {
+    const data = await api('/mcp/tools/' + name + '/invoke', 'POST', { args });
+    const elapsed = Date.now() - t0;
+    const isErr = data.status === 'error' || data.result?.error;
+    resultEl.className = 'test-result ' + (isErr ? 'result-err' : 'result-ok');
+
+    // Pretty-print result (handle base64 images)
+    let displayResult = { ...data.result };
+    if (displayResult.image_b64) displayResult.image_b64 = '[base64 image omitted]';
+    if (displayResult.qr_image_b64) displayResult.qr_image_b64 = '[base64 image omitted]';
+
+    let extra = '';
+    if (data.result?.image_b64) {
+      extra = `<img src="data:${data.result.mime || 'image/png'};base64,${data.result.image_b64}" style="max-width:100%;max-height:300px;border-radius:8px;margin-top:8px" />`;
+    }
+    if (data.result?.qr_image_b64) {
+      extra = `<img src="data:image/png;base64,${data.result.qr_image_b64}" style="max-width:200px;border-radius:8px;margin-top:8px" />`;
+    }
+    if (data.result?.download_url) {
+      extra = `<a href="${data.result.download_url}" target="_blank" class="btn btn-primary btn-sm" style="margin-top:8px;display:inline-block">⬇ Download File</a>`;
+    }
+
+    resultEl.innerHTML = `
+      <pre>${JSON.stringify(displayResult, null, 2)}</pre>
+      ${extra}
+      <div class="result-latency">⏱ Server: ${data.duration_ms}ms · Round-trip: ${elapsed}ms · Status: <span class="${isErr ? 'status-err' : 'status-ok'}">${data.status}</span></div>
+    `;
+  } catch (e) {
+    resultEl.className = 'test-result result-err';
+    resultEl.innerHTML = `<pre>Network error: ${e.message}</pre>`;
+  }
+}
+
+// ── Logs ───────────────────────────────────────────────────────────────────
+async function loadLogs() {
+  const data = await api('/mcp/logs?limit=100');
+  allLogs = data.logs || [];
+  renderLogs();
+}
+
+function renderLogs() {
+  const tbody = document.getElementById('logBody');
+  if (!tbody) return;
+  if (!allLogs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--sub);padding:30px">No calls logged yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allLogs.map(l => {
+    const args = JSON.stringify(l.args || {}).slice(0, 80);
+    const ts = new Date(l.ts + 'Z').toLocaleString();
+    return `
+      <tr>
+        <td><span class="log-tool">${l.tool}</span></td>
+        <td><span class="${l.status === 'ok' ? 'status-ok' : 'status-err'}">${l.status === 'ok' ? '✅ ok' : '❌ error'}</span></td>
+        <td><span class="ms-badge">${l.duration_ms}ms</span></td>
+        <td><span class="log-args" title="${args}">${args}</span></td>
+        <td><span class="log-ts">${ts}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function clearLogs() {
+  if (!confirm('Clear all call logs?')) return;
+  await api('/mcp/logs', 'DELETE');
+  allLogs = [];
+  renderLogs();
+  refreshStats();
+}
+
+// ── Dashboard ──────────────────────────────────────────────────────────────
+async function loadDashboard() {
+  await loadTools();
+  await refreshStats();
+}
+
+async function refreshStats() {
+  const health = await api('/mcp/health');
+  document.getElementById('statTotal').textContent = health.tools || '–';
+  document.getElementById('statEnabled').textContent = (health.tools - health.disabled) || '–';
+  document.getElementById('infoEndpoint').textContent = BASE + '/mcp';
+  document.getElementById('infoProtocol').textContent = health.protocol || '–';
+  document.getElementById('infoSubs').textContent = health.sse_subscribers || 0;
+  document.getElementById('infoTime').textContent = new Date(health.ts + 'Z').toLocaleString();
+
+  const logsData = await api('/mcp/logs?limit=200');
+  const logs = logsData.logs || [];
+  const totalCalls = logs.length;
+  const totalErrors = logs.filter(l => l.status === 'error').length;
+  document.getElementById('statCalls').textContent = totalCalls;
+  document.getElementById('statErrors').textContent = totalErrors;
+
+  // Recent calls
+  const recent = document.getElementById('recentCalls');
+  const last5 = logs.slice(0, 5);
+  if (!last5.length) {
+    recent.innerHTML = '<div style="color:var(--sub);font-size:13px">No calls yet…</div>';
+  } else {
+    recent.innerHTML = last5.map(l => `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span class="${l.status === 'ok' ? 'status-ok' : 'status-err'}">${l.status === 'ok' ? '✅' : '❌'}</span>
+        <span style="font-weight:600;color:var(--accent)">${l.tool}</span>
+        <span class="ms-badge">${l.duration_ms}ms</span>
+        <span style="color:var(--sub);margin-left:auto">${new Date(l.ts + 'Z').toLocaleTimeString()}</span>
+      </div>
+    `).join('');
+  }
+
+  // Category chart
+  const catMap = {};
+  tools.forEach(t => { catMap[t.category || 'general'] = (catMap[t.category || 'general'] || 0) + 1; });
+  const catEl = document.getElementById('categoryChart');
+  const colors = {'information':'var(--blue)','utility':'var(--green)','developer':'var(--accent)','productivity':'var(--yellow)','media':'var(--red)','math':'#06b6d4','language':'#8b5cf6','general':'var(--sub)'};
+  catEl.innerHTML = Object.entries(catMap).map(([cat, n]) =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:color-mix(in srgb,${colors[cat]||'var(--accent)'} 12%,transparent);border:1px solid color-mix(in srgb,${colors[cat]||'var(--accent)'} 30%,transparent);border-radius:8px">
+      <span style="font-weight:700;color:${colors[cat]||'var(--accent)'}">${n}</span>
+      <span style="font-size:12px;color:var(--text)">${cat}</span>
+    </div>`
+  ).join('');
+}
+
+// ── Config ─────────────────────────────────────────────────────────────────
+function loadConfig() {
+  document.getElementById('cfgRpc').value = BASE + '/mcp';
+  document.getElementById('cfgSse').value = BASE + '/mcp/sse';
+  document.getElementById('cfgTools').value = BASE + '/mcp/tools';
+
+  const desktopConfig = {
+    mcpServers: {
+      "hw2-mcp": {
+        command: "curl",
+        args: ["-s", "-X", "POST", BASE + "/mcp"],
+        env: {}
+      }
+    }
+  };
+  document.getElementById('desktopConfig').textContent = JSON.stringify(desktopConfig, null, 2);
+
+  document.getElementById('sdkExample').textContent = `// JavaScript MCP SDK example
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+const client = new Client({ name: "hw2-client", version: "1.0.0" }, {});
+
+// Call a tool
+const result = await fetch("${BASE}/mcp", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: {
+      name: "calculator",
+      arguments: { expression: "2 * (3 + 4)" }
+    }
+  })
+});
+
+// Subscribe to real-time events
+const evtSource = new EventSource("${BASE}/mcp/sse");
+evtSource.onmessage = (e) => console.log(JSON.parse(e.data));`;
+}
+
+// ── Schema ─────────────────────────────────────────────────────────────────
+async function loadSchema() {
+  const data = await api('/mcp/tools');
+  document.getElementById('fullSchema').textContent = JSON.stringify(
+    (data.tools || []).map(t => ({
+      name: t.name,
+      description: t.description,
+      category: t.category,
+      icon: t.icon,
+      risk_level: t.risk_level,
+      parameters: t.parameters,
+    })),
+    null, 2
+  );
+}
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+function copyField(id, isPre = false) {
+  const el = document.getElementById(id);
+  const text = isPre ? el.textContent : el.value;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = el.nextElementSibling || el.parentElement.querySelector('button');
+    if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 2000); }
+  });
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+(async () => {
+  connectSSE();
+  await loadTools();
+  await loadDashboard();
+})();
+</script>
+</body>
+</html>

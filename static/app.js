@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-//  HW01 ChatGPT — app.js
-//  NEW: token chart, accent color picker, response timer, conversation branches
+//  HW02 ChatGPT — app.js  (with RAG support)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const VISION_MODELS = new Set([
+  "gemini/gemini-2.5-flash",
+  "gemini/gemini-2.5-pro",
   "meta/llama-3.2-11b-vision-instruct",
   "microsoft/phi-3.5-vision-instruct",
 ]);
@@ -54,6 +55,7 @@ const streamingBadge        = document.getElementById("streamingBadge");
 const memoryBadge           = document.getElementById("memoryBadge");
 const thinkingBadge         = document.getElementById("thinkingBadge");
 const tokenBadge            = document.getElementById("tokenBadge");
+const ragBadge              = document.getElementById("ragBadge");
 const clearChatButton       = document.getElementById("clearChat");
 const stopStreamingButton   = document.getElementById("stopStreaming");
 const newChatBtn            = document.getElementById("newChatBtn");
@@ -74,10 +76,42 @@ const accentCustomEl        = document.getElementById("accentCustom");
 const tokenChartCanvas      = document.getElementById("tokenChart");
 const chartToggleBtn        = document.getElementById("chartToggle");
 const chartPanel            = document.getElementById("chartPanel");
+const longMemoryEl          = document.getElementById("longMemory");
+const autoRouteEl           = document.getElementById("autoRoute");
+const toolsEnabledEl        = document.getElementById("toolsEnabled");
+const toolMaxIterEl         = document.getElementById("toolMaxIter");
+const toolMaxIterValueEl    = document.getElementById("toolMaxIterValue");
+const routeBadge            = document.getElementById("routeBadge");
+const longMemoryBadge       = document.getElementById("longMemoryBadge");
+const refreshMemBtn         = document.getElementById("refreshMemBtn");
+const memoryListEl          = document.getElementById("memoryList");
+const toolsListEl           = document.getElementById("toolsList");
+const agentModeEl           = document.getElementById("agentMode");
+const ttsAutoEl             = document.getElementById("ttsAuto");
+const shareChatBtn          = document.getElementById("shareChat");
+const shareResultEl         = document.getElementById("shareResult");
+const uploadBtn             = document.getElementById('uploadButton') || document.querySelector('.upload-btn');
+
+// ── RAG DOM refs (NEW) ────────────────────────────────────────────────────────
+const ragUploadBtn  = document.getElementById('ragUploadBtn');
+const ragFileInput  = document.getElementById('ragFileInput');
+const ragDocListEl  = document.getElementById('ragDocList');
+const ragEnabledEl  = document.getElementById('ragEnabled');
+const ragStatusEl   = document.getElementById('ragStatus');
+
+// ── Upload always enabled ─────────────────────────────────────────────────────
+function forceEnableUpload() {
+  if (fileInput) fileInput.disabled = false;
+  if (uploadBtn) {
+    uploadBtn.classList.remove('disabled');
+    uploadBtn.style.opacity = '1';
+    uploadBtn.style.cursor = 'pointer';
+    uploadBtn.title = '上傳圖片、PDF 或文字檔（需要時會自動路由到 Vision 模型）';
+  }
+}
+forceEnableUpload();
 
 // ── State ─────────────────────────────────────────────────────────────────────
-// Messages: each entry is { role, content, ts, branches?, branchIdx?, ... }
-// branches = array of content strings (assistant variants), branchIdx = active
 let messages          = [];
 let isLoading         = false;
 let abortController   = null;
@@ -87,8 +121,6 @@ let pendingAttachment = null;
 let isDarkTheme       = true;
 let totalPromptTokens     = 0;
 let totalCompletionTokens = 0;
-
-// Token chart data: array of { label, prompt, completion }
 let tokenHistory = [];
 let chartInstance = null;
 
@@ -98,7 +130,6 @@ const lsSet = (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catc
 
 // ── Accent color ──────────────────────────────────────────────────────────────
 function applyAccent(hex) {
-  // Derive hover = darken 10%
   const darken = (h, amt) => {
     let [r,g,b] = [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
     [r,g,b] = [r,g,b].map(c=>Math.max(0,c-amt));
@@ -108,7 +139,6 @@ function applyAccent(hex) {
   document.documentElement.style.setProperty('--accent-hover', darken(hex, 25));
   document.documentElement.style.setProperty('--bubble-user', hex);
   lsSet('accent', hex);
-  // Update swatch selection
   document.querySelectorAll('.accent-swatch').forEach(s => {
     s.classList.toggle('selected', s.dataset.color === hex);
   });
@@ -132,21 +162,19 @@ function buildAccentPicker() {
 // ── Token chart ───────────────────────────────────────────────────────────────
 function addTokenRecord(label, prompt, completion) {
   tokenHistory.push({ label, prompt, completion });
-  if (tokenHistory.length > 20) tokenHistory.shift(); // keep last 20
+  if (tokenHistory.length > 20) tokenHistory.shift();
   renderChart();
 }
 
 function renderChart() {
   if (!tokenChartCanvas || !window.Chart) return;
-  const labels     = tokenHistory.map((r,i) => r.label || `#${i+1}`);
-  const prompts    = tokenHistory.map(r => r.prompt);
+  const labels      = tokenHistory.map((r,i) => r.label || `#${i+1}`);
+  const prompts     = tokenHistory.map(r => r.prompt);
   const completions = tokenHistory.map(r => r.completion);
-
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#10a37f';
-  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-  const gridColor  = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
-  const textColor  = isDark ? '#a0a0a0' : '#666';
-
+  const accent  = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#10a37f';
+  const isDark  = document.documentElement.getAttribute('data-theme') !== 'light';
+  const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  const textColor = isDark ? '#a0a0a0' : '#666';
   if (chartInstance) {
     chartInstance.data.labels = labels;
     chartInstance.data.datasets[0].data = prompts;
@@ -158,7 +186,6 @@ function renderChart() {
     chartInstance.update('none');
     return;
   }
-
   chartInstance = new Chart(tokenChartCanvas, {
     type: 'bar',
     data: {
@@ -189,7 +216,7 @@ function applyTheme(dark) {
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   themeToggleBtn.textContent = dark ? '☀️ 淺色' : '🌙 深色';
   lsSet('theme', dark ? 'dark' : 'light');
-  if (chartInstance) renderChart(); // update chart colors
+  if (chartInstance) renderChart();
 }
 themeToggleBtn.addEventListener('click', () => applyTheme(!isDarkTheme));
 
@@ -235,13 +262,30 @@ saveTemplateBtn.addEventListener('click', () => {
 const escapeHtml = str => String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
 function inlineMarkdown(raw) {
-  return escapeHtml(raw)
+  // ① Extract download links BEFORE escapeHtml so brackets aren't destroyed
+  const links = [];
+  raw = raw.replace(
+    /\[([^\]]+)\]\((\/api\/(?:download|rag)[^\)]+)\)/g,
+    (_, label, href) => {
+      const idx = links.length;
+      links.push(`<a href="${href}" download="${href.split('/').pop()}">${label}</a>`);
+      return `\x00LINK${idx}\x00`;
+    }
+  );
+
+  let result = escapeHtml(raw)
+    .replace(/!\[([^\]]*)\]\((data:image\/[a-zA-Z0-9.+-]+;base64,[^)]+|https?:\/\/[^)]+)\)/g, '<img class="generated-image" alt="$1" src="$2">')
     .replace(/`([^`]+)`/g,'<code class="inline-code">$1</code>')
     .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g,'<em>$1</em>')
     .replace(/~~(.+?)~~/g,'<del>$1</del>')
-    .replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+    .replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/)[^\)]+)\)/g,'<a href="$2" download>$1</a>')
+    .replace(/(^|[\s(])(\/api\/download\/[^\s)]+)/g,'$1<a href="$2" download>$2</a>');
+
+  // ③ Restore extracted links
+  result = result.replace(/\x00LINK(\d+)\x00/g, (_, i) => links[+i]);
+  return result;
 }
 
 function renderMarkdown(raw) {
@@ -294,8 +338,25 @@ const parseThinking = text => {
   return m?{thinkContent:m[1].trim(),answerContent:m[2].trim()}:{thinkContent:null,answerContent:text};
 };
 
-const formatTs = iso => iso ? new Date(iso).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}) : '';
-const formatDur = ms => ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(1)}s`;
+const formatTs  = iso => iso ? new Date(iso).toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'}) : '';
+const formatDur = ms  => ms < 1000 ? `${ms}ms` : `${(ms/1000).toFixed(1)}s`;
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
+function cleanForSpeech(text) {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, '程式碼區塊略過。')
+    .replace(/!\[[^\]]*\]\(data:image[^)]+\)/g, '圖片已生成。')
+    .replace(/<think>[\s\S]*?<\/think>/g, '')
+    .replace(/[#*_`>\[\]()]/g, '')
+    .slice(0, 900);
+}
+function speakAssistant(text) {
+  if (!ttsAutoEl?.checked || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(cleanForSpeech(text));
+  utter.lang = 'zh-TW'; utter.rate = 1.0;
+  window.speechSynthesis.speak(utter);
+}
 
 // ── Render messages ───────────────────────────────────────────────────────────
 function renderMessages() {
@@ -306,7 +367,6 @@ function renderMessages() {
     const bubble = document.createElement('div');
     bubble.className = `message-bubble ${msg.role}`;
 
-    // Header
     const hdr = document.createElement('div'); hdr.className = 'message-header';
     const roleEl = document.createElement('span'); roleEl.className = 'message-role';
     roleEl.textContent = msg.role==='user' ? 'You' : 'Assistant';
@@ -314,18 +374,13 @@ function renderMessages() {
     tsEl.textContent = formatTs(msg.ts);
     hdr.appendChild(roleEl); hdr.appendChild(tsEl); bubble.appendChild(hdr);
 
-    // Image / file chip
     if (msg.imagePreview) { const img=document.createElement('img'); img.src=msg.imagePreview; img.className='message-image'; bubble.appendChild(img); }
     else if (msg.filename) { const chip=document.createElement('div'); chip.style.cssText='font-size:12px;color:#9ef3df;margin-bottom:6px;'; chip.textContent='📎 '+msg.filename; bubble.appendChild(chip); }
 
     const contentEl = document.createElement('div'); contentEl.className = 'message-content';
 
     if (msg.role === 'assistant') {
-      // No branch navigator on assistant side — it's controlled by the user nav above
-      const activeContent = msg.branches
-        ? (msg.branches[msg.branchIdx||0] || '')
-        : (msg.content || '');
-
+      const activeContent = msg.branches ? (msg.branches[msg.branchIdx||0] || '') : (msg.content || '');
       const { thinkContent, answerContent } = parseThinking(activeContent);
       if (thinkContent) {
         const tb=document.createElement('div'); tb.className='thinking-block';
@@ -339,38 +394,62 @@ function renderMessages() {
         contentEl.querySelectorAll('pre code').forEach(b=>{if(window.hljs)hljs.highlightElement(b);});
       }
 
-      // Token info + response time
+      // RAG sources badge
+      if (msg.ragChunks && msg.ragChunks.length) {
+        const ragBox = document.createElement('div');
+        ragBox.className = 'rag-sources';
+        ragBox.innerHTML = `<div class="rag-sources-title">📄 RAG 來源（${msg.ragChunks.length} 片段）</div>` +
+          msg.ragChunks.map(c =>
+            `<div class="rag-source-item"><span class="rag-source-score">${(c.score*100).toFixed(0)}%</span><span class="rag-source-file">${escapeHtml(c.filename)}</span><span class="rag-source-preview">${escapeHtml((c.content||'').slice(0,80))}…</span></div>`
+          ).join('');
+        contentEl.appendChild(ragBox);
+      }
+
       const metaEl = document.createElement('div'); metaEl.className = 'msg-meta';
       if (msg.usage) metaEl.textContent = `↑ ${msg.usage.prompt_tokens} · ↓ ${msg.usage.completion_tokens} tokens`;
       if (msg.duration) metaEl.textContent += (msg.usage ? '  ·  ' : '') + `⏱ ${formatDur(msg.duration)}`;
+      if (msg.route) metaEl.textContent += (metaEl.textContent ? '  ·  ' : '') + `🔀 ${msg.route.model || ''}${msg.route.reason ? ' — ' + msg.route.reason : ''}`;
       if (metaEl.textContent) contentEl.appendChild(metaEl);
 
-      // Action bar
+      if (msg.agentSteps && msg.agentSteps.length) {
+        const agentBox = document.createElement('div'); agentBox.className = 'agent-steps';
+        agentBox.innerHTML = `<div class="agent-title">🧩 Agent Plan</div>` + msg.agentSteps.map((st, i) =>
+          `<div class="agent-step"><span class="agent-dot">${i+1}</span><div><b>${escapeHtml(st.title||`Step ${i+1}`)}</b><p>${escapeHtml(st.detail||'')}</p></div></div>`
+        ).join('');
+        contentEl.appendChild(agentBox);
+      }
+      if (msg.toolIterProgress) {
+        const badge = document.createElement('div'); badge.className = 'tool-iter-badge';
+        badge.textContent = `⚙️ ${msg.toolIterProgress}`; contentEl.appendChild(badge);
+      }
+      if (msg.toolEvents && msg.toolEvents.length) {
+        const toolBox = document.createElement('div'); toolBox.className = 'tool-events';
+        toolBox.innerHTML = msg.toolEvents.map(ev => {
+          if (ev.type === 'tool_start') return `<div>🔧 呼叫工具：<code>${escapeHtml(ev.name||'')}</code></div>`;
+          if (ev.type === 'tool_end')   return `<div>✅ 工具完成：<code>${escapeHtml(ev.name||'')}</code> <span>${ev.latency_ms||0}ms</span></div>`;
+          return `<div>${escapeHtml(JSON.stringify(ev))}</div>`;
+        }).join('');
+        contentEl.appendChild(toolBox);
+      }
+
       if (!msg.isStreaming) {
         const bar=document.createElement('div'); bar.className='msg-actions';
         const regen=document.createElement('button'); regen.className='msg-action-btn';
-        regen.textContent='🔄 重新生成'; regen.onclick=()=>regenerateFrom(idx);  // idx = assistantIdx
+        regen.textContent='🔄 重新生成'; regen.onclick=()=>regenerateFrom(idx);
         bar.appendChild(regen); contentEl.appendChild(bar);
       }
     } else {
-      // User: show active branch content
       const activeContent = msg.branches ? (msg.branches[msg.branchIdx||0]||'') : msg.content;
-
-      // Branch navigator for user messages too
       if (msg.branches && msg.branches.length > 1) {
         const nav=document.createElement('div'); nav.className='branch-nav';
         const prev=document.createElement('button'); prev.className='branch-btn'; prev.textContent='‹';
-        prev.disabled=(msg.branchIdx||0)===0;
-        prev.onclick=()=>switchBranch(idx,(msg.branchIdx||0)-1);
+        prev.disabled=(msg.branchIdx||0)===0; prev.onclick=()=>switchBranch(idx,(msg.branchIdx||0)-1);
         const counter=document.createElement('span'); counter.className='branch-counter';
         counter.textContent=`${(msg.branchIdx||0)+1} / ${msg.branches.length}`;
         const next=document.createElement('button'); next.className='branch-btn'; next.textContent='›';
-        next.disabled=(msg.branchIdx||0)===msg.branches.length-1;
-        next.onclick=()=>switchBranch(idx,(msg.branchIdx||0)+1);
-        nav.appendChild(prev); nav.appendChild(counter); nav.appendChild(next);
-        contentEl.appendChild(nav);
+        next.disabled=(msg.branchIdx||0)===msg.branches.length-1; next.onclick=()=>switchBranch(idx,(msg.branchIdx||0)+1);
+        nav.appendChild(prev); nav.appendChild(counter); nav.appendChild(next); contentEl.appendChild(nav);
       }
-
       const txt=document.createElement('div'); txt.style.whiteSpace='pre-wrap'; txt.textContent=activeContent; contentEl.appendChild(txt);
       const bar=document.createElement('div'); bar.className='msg-actions user-actions';
       const edit=document.createElement('button'); edit.className='msg-action-btn';
@@ -384,48 +463,20 @@ function renderMessages() {
 }
 
 // ── Branching ─────────────────────────────────────────────────────────────────
-/**
- * Data model
- * ----------
- * Every exchange (user + assistant pair) is stored as TWO consecutive entries in
- * `messages[]`, BUT we use a "slot" concept to track paired branches:
- *
- *   messages[N]   = { role:'user', content, branches:['v1','v2',...], branchIdx, slotId, ... }
- *   messages[N+1] = { role:'assistant', content, branches:['r1','r2',...], branchIdx, slotId, ... }
- *
- * Both have the SAME slotId.  branchIdx is kept in sync so branch[i] of the user
- * always corresponds to branch[i] of the assistant.
- *
- * switchBranch(userIdx, newBranchIdx)
- *   → sets both messages[userIdx].branchIdx and messages[userIdx+1].branchIdx
- *   → re-renders
- *
- * When user edits message at userIdx:
- *   1. Save current state: no truncation yet — just note editIdx in chatInput
- *   2. On re-send: save the OLD assistant reply into aMsg.branches[currentBranchIdx]
- *      if not already stored, then push new versions to both branches arrays.
- */
-
 function startEditMessage(idx) {
   if (isLoading) return;
   const msg = messages[idx];
   chatInput.value = msg.branches ? (msg.branches[msg.branchIdx||0]||'') : msg.content;
-  chatInput.dataset.editIdx = idx;
-  chatInput.focus();
+  chatInput.dataset.editIdx = idx; chatInput.focus();
 }
 
 function switchBranch(userIdx, newBranchIdx) {
   const uMsg = messages[userIdx];
   if (!uMsg?.branches || newBranchIdx < 0 || newBranchIdx >= uMsg.branches.length) return;
-
   uMsg.branchIdx = newBranchIdx;
-
-  // Always sync the immediately following assistant message
   const aMsg = messages[userIdx + 1];
   if (aMsg?.role === 'assistant' && aMsg.branches && newBranchIdx < aMsg.branches.length) {
-    aMsg.branchIdx = newBranchIdx;
-    // Also sync content so streaming / rendering reads the right branch
-    aMsg.content = aMsg.branches[newBranchIdx];
+    aMsg.branchIdx = newBranchIdx; aMsg.content = aMsg.branches[newBranchIdx];
   }
   renderMessages();
 }
@@ -434,21 +485,14 @@ async function regenerateFrom(assistantIdx) {
   if (isLoading) return;
   const userIdx = assistantIdx - 1;
   if (userIdx < 0 || messages[userIdx]?.role !== 'user') return;
-
-  const uMsg = messages[userIdx];
-  const aMsg = messages[assistantIdx];
-
-  // Current user text (active branch)
-  const userText = uMsg.branches ? (uMsg.branches[uMsg.branchIdx||0]||'') : uMsg.content;
-
-  // Mark editIdx so doSend knows to branch
-  await doSend(userText, userIdx, /* isRegen */ true);
+  const userText = messages[userIdx].branches ? (messages[userIdx].branches[messages[userIdx].branchIdx||0]||'') : messages[userIdx].content;
+  await doSend(userText, userIdx, true);
 }
 
 // ── Error ─────────────────────────────────────────────────────────────────────
 function setError(text='') { errorBox.textContent=text; errorBox.classList.toggle('hidden',!text); }
 
-// ── Token badge + chart ───────────────────────────────────────────────────────
+// ── Token badge ───────────────────────────────────────────────────────────────
 function updateTokenBadge(usage, label) {
   if (!usage) return;
   totalPromptTokens     += usage.prompt_tokens || 0;
@@ -466,18 +510,176 @@ function updateControls() {
   memoryWindowValueEl.textContent   = memoryWindowEl.value;
   thinkingBudgetValueEl.textContent = thinkingBudgetEl.value;
   fontSizeValueEl.textContent       = fontSizeEl.value+'px';
-  currentModelText.textContent      = `目前模型：${modelEl.value}`;
-  streamingBadge.textContent        = streamingEl.checked?'Streaming On':'Streaming Off';
-  memoryBadge.textContent           = shortMemoryEl.checked?`Memory ${memoryWindowEl.value}`:'Memory Off';
-  memoryWindowEl.disabled           = !shortMemoryEl.checked;
-  thinkingBudgetGroup.style.display = thinkingModeEl.checked?'block':'none';
-  thinkingBadge.classList.toggle('hidden',!thinkingModeEl.checked);
-  const isVision=VISION_MODELS.has(modelEl.value);
-  visionHint.classList.toggle('hidden',!isVision);
-  const ul=document.querySelector('.upload-btn');
-  if(ul){ul.title=isVision?'上傳圖片（Vision 模型）':'請切換至 Vision 模型才能上傳圖片'; ul.style.opacity=isVision?'1':'0.35'; ul.style.cursor=isVision?'pointer':'not-allowed'; fileInput.disabled=!isVision;}
-  sendButton.disabled=isLoading;
+  if (toolMaxIterValueEl && toolMaxIterEl) {
+    toolMaxIterValueEl.textContent = toolMaxIterEl.value;
+    const iterGroup = document.getElementById('toolIterGroup');
+    if (iterGroup) iterGroup.style.display = toolsEnabledEl?.checked ? 'flex' : 'none';
+  }
+  currentModelText.textContent = `目前模型：${modelEl.value}`;
+  streamingBadge.textContent   = streamingEl.checked ? 'Streaming On' : 'Streaming Off';
+  memoryBadge.textContent      = shortMemoryEl.checked ? `Memory ${memoryWindowEl.value}` : 'Memory Off';
+  if (longMemoryBadge) {
+    longMemoryBadge.textContent = longMemoryEl?.checked ? 'Long Memory On' : 'Long Memory Off';
+    longMemoryBadge.classList.toggle('muted', !(longMemoryEl?.checked));
+  }
+  if (routeBadge) {
+    routeBadge.textContent = autoRouteEl?.checked ? '🔀 Auto Route' : '🔀 Manual Model';
+    routeBadge.classList.toggle('muted', !(autoRouteEl?.checked));
+  }
+  // RAG badge
+  if (ragBadge) {
+    ragBadge.textContent = '📄 RAG On';
+    ragBadge.classList.toggle('hidden', !(ragEnabledEl?.checked));
+  }
+  memoryWindowEl.disabled = !shortMemoryEl.checked;
+  thinkingBudgetGroup.style.display = thinkingModeEl.checked ? 'block' : 'none';
+  thinkingBadge.classList.toggle('hidden', !thinkingModeEl.checked);
+  const isVision   = VISION_MODELS.has(modelEl.value);
+  const autoRouteOn = !!(autoRouteEl?.checked);
+  if (visionHint) {
+    if (isVision) { visionHint.textContent='👁 此模型支援圖片 / PDF 上傳'; visionHint.classList.remove('hidden'); }
+    else if (autoRouteOn) { visionHint.textContent='🔀 已啟用自動路由：可直接上傳圖片 / PDF'; visionHint.classList.remove('hidden'); }
+    else { visionHint.textContent='📎 可上傳檔案；若上傳圖片 / PDF，系統會自動改用 Vision 模型'; visionHint.classList.remove('hidden'); }
+  }
+  const ul = uploadBtn || document.querySelector('.upload-btn');
+  if (ul) { ul.style.opacity='1'; ul.style.cursor='pointer'; if(fileInput) fileInput.disabled=false; }
+  forceEnableUpload();
+  sendButton.disabled = isLoading;
 }
+
+// ── Memory / Tools panels ─────────────────────────────────────────────────────
+async function loadMemories() {
+  if (!memoryListEl) return;
+  try {
+    const r = await fetch('/api/memories'); const data = await r.json();
+    const memories = data.memories || [];
+    memoryListEl.innerHTML = '';
+    if (!memories.length) { memoryListEl.innerHTML='<div class="empty-small">尚無長期記憶</div>'; return; }
+    memories.forEach(m => {
+      const item=document.createElement('div'); item.className='memory-item';
+      const tag=document.createElement('span'); tag.className='memory-tag'; tag.textContent=m.type||'memory';
+      const content=document.createElement('span'); content.className='memory-content';
+      content.textContent=(m.content||'').length>70?(m.content||'').slice(0,70)+'…':(m.content||''); content.title=m.content||'';
+      const del=document.createElement('button'); del.className='memory-delete'; del.textContent='✕';
+      del.onclick=async()=>{ await fetch('/api/memories/'+m.id,{method:'DELETE'}); await loadMemories(); };
+      item.appendChild(tag); item.appendChild(content); item.appendChild(del); memoryListEl.appendChild(item);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadTools() {
+  if (!toolsListEl) return;
+  try {
+    const r = await fetch('/api/tools'); const data = await r.json();
+    const tools = data.tools || [];
+    toolsListEl.innerHTML = '';
+    tools.forEach(t => {
+      const item=document.createElement('div'); item.className='tool-item';
+      item.innerHTML=`<span class="tool-name">${escapeHtml(t.name)}</span><span class="tool-risk ${escapeHtml(t.risk_level||'low')}">${escapeHtml(t.risk_level||'low')}</span>`;
+      item.title=t.description||''; toolsListEl.appendChild(item);
+    });
+  } catch(e) { console.error(e); }
+}
+
+// ── RAG Document Manager (NEW) ────────────────────────────────────────────────
+function showRagStatus(msg, isError = false) {
+  if (!ragStatusEl) return;
+  ragStatusEl.textContent = msg;
+  ragStatusEl.className = 'rag-status' + (isError ? ' error' : '');
+  ragStatusEl.classList.remove('hidden');
+  setTimeout(() => ragStatusEl.classList.add('hidden'), 4000);
+}
+
+async function loadRagDocs() {
+  console.log("loadRagDocs called, session:", currentSessionId);
+  if (!ragDocListEl || !currentSessionId) return;
+  try {
+    const r = await fetch(`/api/rag/docs?session_id=${currentSessionId}`);
+    const data = await r.json();
+    const docs = data.docs || [];
+    ragDocListEl.innerHTML = '';
+    if (!docs.length) {
+      ragDocListEl.innerHTML = '<div class="empty-small">尚無文件，上傳後可以直接問答。</div>';
+      return;
+    }
+    docs.forEach(doc => {
+      const item = document.createElement('div'); item.className = 'rag-doc-item';
+      item.innerHTML = `
+        <span class="rag-doc-icon">📄</span>
+        <span class="rag-doc-name" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.filename)}</span>
+        <span class="rag-doc-meta">${doc.chunk_count} 片段</span>
+        <button class="rag-doc-del" data-id="${doc.id}" title="刪除">✕</button>
+      `;
+      item.querySelector('.rag-doc-del').addEventListener('click', async (e) => {
+        const id = e.currentTarget.dataset.id;
+        await fetch(`/api/rag/docs/${id}`, { method: 'DELETE' });
+        loadRagDocs();
+      });
+      ragDocListEl.appendChild(item);
+    });
+  } catch(e) { console.error(e); }
+}
+
+if (ragUploadBtn && ragFileInput) {
+  ragUploadBtn.addEventListener('click', () => { ragFileInput.value = ''; ragFileInput.click(); });
+  ragFileInput.addEventListener('change', async () => {
+    const file = ragFileInput.files[0];
+    if (!file || !currentSessionId) return;
+    showRagStatus(`正在處理 ${file.name}…`);
+    ragUploadBtn.disabled = true;
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const r = await fetch(`/api/rag/ingest?session_id=${currentSessionId}`, { method: 'POST', body: fd });
+      const data = await r.json();
+      if (data.error) {
+        showRagStatus('上傳失敗：' + data.error, true);
+      } else if (data.status === 'already_ingested') {
+        showRagStatus(`${file.name} 已存在（${data.chunk_count} 片段）`);
+      } else {
+        showRagStatus(`✅ ${file.name} 已建立索引（${data.chunk_count} 片段）`);
+        loadRagDocs();
+      }
+    } catch(e) { showRagStatus('上傳錯誤：' + e.message, true); }
+    finally { ragUploadBtn.disabled = false; }
+  });
+}
+
+// ★ RAG URL 抓取
+const ragUrlBtn   = document.getElementById('ragUrlBtn');
+const ragUrlInput = document.getElementById('ragUrlInput');
+ 
+if (ragUrlBtn && ragUrlInput) {
+  ragUrlBtn.addEventListener('click', async () => {
+    const url = ragUrlInput.value.trim();
+    if (!url || !currentSessionId) return;
+    if (!url.startsWith('http')) { showRagStatus('請輸入完整的 http/https 網址', true); return; }
+    showRagStatus(`正在抓取 ${url}…`);
+    ragUrlBtn.disabled = true;
+    try {
+      const r = await fetch(
+        `/api/rag/ingest?session_id=${currentSessionId}&url=${encodeURIComponent(url)}`,
+        { method: 'POST' }
+      );
+      const data = await r.json();
+      if (data.error) {
+        showRagStatus('抓取失敗：' + data.error, true);
+      } else if (data.status === 'already_ingested') {
+        showRagStatus(`已存在（${data.chunk_count} 片段）`);
+      } else {
+        showRagStatus(`✅ 已建立索引（${data.chunk_count} 片段）`);
+        loadRagDocs();
+        ragUrlInput.value = '';
+      }
+    } catch(e) { showRagStatus('錯誤：' + e.message, true); }
+    finally { ragUrlBtn.disabled = false; }
+  });
+ 
+  // 按 Enter 也能觸發
+  ragUrlInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); ragUrlBtn.click(); }
+  });
+}
+if (ragEnabledEl) ragEnabledEl.addEventListener('change', updateControls);
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 async function loadSessions() {
@@ -504,7 +706,7 @@ async function startNewChat() {
   const r=await fetch('/api/sessions',{method:'POST'});
   currentSessionId=(await r.json()).session_id;
   messages=[{role:'assistant',content:'嗨！我是你的自製 ChatGPT。有什麼可以幫你的嗎？',ts:new Date().toISOString()}];
-  chatTitleEl.textContent='Chat'; renderMessages(); await loadSessions();
+  chatTitleEl.textContent='Chat'; renderMessages(); await loadSessions(); await loadRagDocs();
 }
 
 async function loadSession(sid) {
@@ -514,7 +716,7 @@ async function loadSession(sid) {
   const r=await fetch(`/api/sessions/${sid}/messages`); const d=await r.json();
   messages=d.messages.length?d.messages.map(m=>({...m,ts:m.created_at})):[{role:'assistant',content:'這是空的對話，開始輸入吧！',ts:new Date().toISOString()}];
   chatTitleEl.textContent=sessions.find(s=>s.id===sid)?.title||'Chat';
-  renderMessages(); renderSessionList();
+  renderMessages(); renderSessionList(); await loadRagDocs();
 }
 
 async function autoTitleSession(text) {
@@ -527,8 +729,7 @@ async function autoTitleSession(text) {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 exportMdBtn.addEventListener('click',()=>{
-  const title=chatTitleEl.textContent||'chat';
-  let md=`# ${title}\n\n`;
+  const title=chatTitleEl.textContent||'chat'; let md=`# ${title}\n\n`;
   messages.forEach(m=>{const c=m.branches?(m.branches[m.branchIdx||0]||''):m.content;md+=`**${m.role==='user'?'You':'Assistant'}**${m.ts?` _(${formatTs(m.ts)})_`:''}\n\n${c}\n\n---\n\n`;});
   dl(md,`${title}.md`,'text/markdown');
 });
@@ -539,6 +740,7 @@ exportJsonBtn.addEventListener('click',()=>{
 function dl(content,filename,mime){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type:mime}));a.download=filename;a.click();URL.revokeObjectURL(a.href);}
 
 // ── File upload ───────────────────────────────────────────────────────────────
+forceEnableUpload();
 fileInput.addEventListener('change',async()=>{
   const file=fileInput.files[0];if(!file)return;
   const fd=new FormData();fd.append('file',file);
@@ -572,10 +774,9 @@ voiceBtn.addEventListener('click',()=>{
   if(isRecording){recognition.stop();}else{recognition.start();isRecording=true;voiceBtn.textContent='⏹';voiceBtn.classList.add('recording');}
 });
 
-// ── Send / branching logic ────────────────────────────────────────────────────
+// ── Send ──────────────────────────────────────────────────────────────────────
 function getPayloadMessages(userText){
   const win=Number(memoryWindowEl.value);
-  // Use active branch content for context
   const ctx=shortMemoryEl.checked?messages.slice(-win).map(m=>({role:m.role,content:m.branches?(m.branches[m.branchIdx||0]||''):m.content})):[];
   return[...ctx,{role:'user',content:userText}];
 }
@@ -584,27 +785,21 @@ async function sendMessage(){
   const text=chatInput.value.trim();
   if((!text&&!pendingAttachment)||isLoading)return;
   const editIdx = chatInput.dataset.editIdx !== undefined ? parseInt(chatInput.dataset.editIdx) : null;
-  delete chatInput.dataset.editIdx;
-  chatInput.value='';
+  delete chatInput.dataset.editIdx; chatInput.value='';
   await doSend(text, editIdx, false);
 }
 
 async function doSend(overrideText, editIdx=null, isRegen=false){
-  // overrideText = the new user text (or null to re-use last user msg for regen)
   let text = overrideText;
   if (text === null) {
     const lu = [...messages].reverse().find(m => m.role==='user');
     text = lu?.branches ? (lu.branches[lu.branchIdx||0]||'') : (lu?.content||'');
   }
-
   setError(''); isLoading=true; updateControls();
 
   let fullText=text, imageB64=null, imageMime=null, userImagePreview=null, userFilename=null;
   if (pendingAttachment) {
     if (pendingAttachment.type==='image') {
-      if (!VISION_MODELS.has(modelEl.value)) {
-        if (confirm(`目前模型「${modelEl.value}」不支援圖片。\n要切換到 llama-3.2-11b-vision 嗎？`)) { modelEl.value='meta/llama-3.2-11b-vision-instruct'; updateControls(); }
-      }
       imageB64=pendingAttachment.b64; imageMime=pendingAttachment.mime;
       userImagePreview=`data:${pendingAttachment.mime};base64,${pendingAttachment.b64}`; userFilename=pendingAttachment.filename;
       if (!fullText) fullText='請描述這張圖片。';
@@ -617,92 +812,55 @@ async function doSend(overrideText, editIdx=null, isRegen=false){
     }
   }
 
-  // ── Determine user message slot & assistant slot ──────────────────────────
   let userMsgIdx, assistantMsgIdx;
-
   if (editIdx !== null && messages[editIdx]?.role === 'user') {
-    // EDIT or REGEN: branch the existing user+assistant pair
-    const uMsg = messages[editIdx];
-    const aMsg = messages[editIdx + 1]; // may or may not exist
-
-    // Initialize branches array on user message if first edit
-    if (!uMsg.branches) {
-      uMsg.branches   = [uMsg.content];
-      uMsg.branchIdx  = 0;
-    }
-
-    if (!isRegen) {
-      // Only push a new user branch when text changed (edit, not regen)
-      uMsg.branches.push(fullText);
-    }
+    const uMsg = messages[editIdx]; const aMsg = messages[editIdx + 1];
+    if (!uMsg.branches) { uMsg.branches=[uMsg.content]; uMsg.branchIdx=0; }
+    if (!isRegen) uMsg.branches.push(fullText);
     uMsg.branchIdx = uMsg.branches.length - 1;
-
-    // Initialize or extend assistant branches
     if (aMsg && aMsg.role === 'assistant') {
-      if (!aMsg.branches) {
-        aMsg.branches  = [aMsg.content];
-        aMsg.branchIdx = 0;
-      }
-      // Push a placeholder for the incoming reply
-      aMsg.branches.push('');
-      aMsg.branchIdx = aMsg.branches.length - 1;
-      aMsg.content   = '';
-      aMsg.isStreaming = true;
-      aMsg.ts        = new Date().toISOString();
-      userMsgIdx      = editIdx;
-      assistantMsgIdx = editIdx + 1;
+      if (!aMsg.branches) { aMsg.branches=[aMsg.content]; aMsg.branchIdx=0; }
+      aMsg.branches.push(''); aMsg.branchIdx=aMsg.branches.length-1; aMsg.content=''; aMsg.isStreaming=true; aMsg.ts=new Date().toISOString();
+      userMsgIdx=editIdx; assistantMsgIdx=editIdx+1;
     } else {
-      // No assistant message yet — create one
-      messages.splice(editIdx + 1, 0, {
-        role:'assistant', content:'', branches:[''], branchIdx:0,
-        isStreaming:true, ts:new Date().toISOString()
-      });
-      userMsgIdx      = editIdx;
-      assistantMsgIdx = editIdx + 1;
+      messages.splice(editIdx+1,0,{role:'assistant',content:'',branches:[''],branchIdx:0,isStreaming:true,ts:new Date().toISOString()});
+      userMsgIdx=editIdx; assistantMsgIdx=editIdx+1;
     }
-
-    // Drop any messages that came AFTER this pair (they belong to old branch)
     messages = messages.slice(0, assistantMsgIdx + 1);
-
   } else {
-    // NORMAL send: push new user + assistant pair
-    messages.push({
-      role:'user', content:fullText,
-      imagePreview:userImagePreview, filename:userFilename,
-      ts:new Date().toISOString()
-    });
-    messages.push({ role:'assistant', content:'', isStreaming:true, ts:new Date().toISOString() });
-    userMsgIdx      = messages.length - 2;
-    assistantMsgIdx = messages.length - 1;
+    messages.push({role:'user',content:fullText,imagePreview:userImagePreview,filename:userFilename,ts:new Date().toISOString()});
+    messages.push({role:'assistant',content:'',isStreaming:true,ts:new Date().toISOString()});
+    userMsgIdx=messages.length-2; assistantMsgIdx=messages.length-1;
   }
-
   renderMessages();
 
   const payload = {
-    model:modelEl.value, systemPrompt:systemPromptEl.value,
-    temperature:Number(temperatureEl.value), top_p:Number(topPEl.value), max_tokens:Number(maxTokensEl.value),
-    messages:getPayloadMessages(fullText), thinking:thinkingModeEl.checked,
-    thinking_budget:Number(thinkingBudgetEl.value), session_id:currentSessionId,
-    image_b64:imageB64||undefined, image_mime:imageMime||undefined,
+    model: modelEl.value, systemPrompt: systemPromptEl.value,
+    temperature: Number(temperatureEl.value), top_p: Number(topPEl.value), max_tokens: Number(maxTokensEl.value),
+    messages: getPayloadMessages(fullText), thinking: thinkingModeEl.checked,
+    thinking_budget: Number(thinkingBudgetEl.value), session_id: currentSessionId,
+    image_b64: imageB64||undefined, image_mime: imageMime||undefined,
+    attachment_type: pendingAttachment?.type || undefined,
+    auto_route: autoRouteEl?.checked ?? true,
+    use_memory: longMemoryEl?.checked ?? true,
+    tools_enabled: toolsEnabledEl?.checked ?? true,
+    tool_max_iterations: Number(toolMaxIterEl?.value ?? 20),
+    agent_mode: agentModeEl?.checked ?? false,
+    // ★ RAG: send flag so backend knows to inject context
+    use_rag: ragEnabledEl?.checked ?? true,
+    user_id: 'default',
   };
 
   clearAttachment();
   if (!isRegen && editIdx === null) autoTitleSession(text||fullText);
 
   const t0 = Date.now();
-
-  // Helper: write completed assistant text into the right slot
-  const finaliseAssistant = (finalText, usage, duration) => {
-    const aMsg = messages[assistantMsgIdx];
-    if (!aMsg) return;
-    aMsg.content     = finalText;
-    aMsg.isStreaming = false;
-    aMsg.duration    = duration;
-    if (usage) aMsg.usage = usage;
-    // Keep branches in sync
-    if (aMsg.branches) {
-      aMsg.branches[aMsg.branchIdx] = finalText;
-    }
+  const finaliseAssistant = (finalText, usage, duration, ragChunks) => {
+    const aMsg = messages[assistantMsgIdx]; if (!aMsg) return;
+    aMsg.content=finalText; aMsg.isStreaming=false; aMsg.duration=duration;
+    if (usage) aMsg.usage=usage;
+    if (ragChunks) aMsg.ragChunks=ragChunks;
+    if (aMsg.branches) aMsg.branches[aMsg.branchIdx]=finalText;
   };
 
   try {
@@ -722,15 +880,50 @@ async function doSend(overrideText, editIdx=null, isRegen=false){
           if (!l.trim()) continue; const ev=JSON.parse(l);
           if (ev.type==='delta') {
             assTxt += ev.content;
-            const aMsg = messages[assistantMsgIdx];
-            if (aMsg) { aMsg.content=assTxt; aMsg.isStreaming=false; if(aMsg.branches) aMsg.branches[aMsg.branchIdx]=assTxt; }
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg){aMsg.content=assTxt;aMsg.isStreaming=false;if(aMsg.branches)aMsg.branches[aMsg.branchIdx]=assTxt;}
+            renderMessages();
+          } else if (ev.type==='rag') {
+            // Store RAG chunks for display
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg) aMsg.ragChunks=ev.chunks;
+            renderMessages();
+          } else if (ev.type==='routing') {
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg) aMsg.route={model:ev.model,reason:ev.reason,task_type:ev.task_type,use_tools:ev.use_tools};
+            if(routeBadge&&ev.model) {
+                routeBadge.textContent=`🔀 ${ev.model}`;
+                // ★ 閃爍動畫
+                routeBadge.style.animation='none';
+                routeBadge.offsetHeight; // trigger reflow
+                routeBadge.style.animation='routeFlash 0.6s ease';
+            }
+            if(currentModelText&&ev.model) currentModelText.textContent=`目前模型：${ev.model}`;
+            renderMessages();
+          } else if (ev.type==='memory') {
+            if(memoryListEl) loadMemories();
+          } else if (ev.type==='agent_step') {
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg){aMsg.agentSteps=aMsg.agentSteps||[];aMsg.agentSteps[ev.index??aMsg.agentSteps.length]={title:ev.title,detail:ev.detail};}
+            renderMessages();
+          } else if (ev.type==='tool_start'||ev.type==='tool_end') {
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg){aMsg.toolEvents=aMsg.toolEvents||[];aMsg.toolEvents.push(ev);}
+            renderMessages();
+          } else if (ev.type==='tool_iteration') {
+            const aMsg=messages[assistantMsgIdx];
+            if(aMsg) aMsg.toolIterProgress=`第 ${ev.iteration} / ${ev.max} 次工具呼叫`;
             renderMessages();
           } else if (ev.type==='usage') {
             updateTokenBadge(ev.usage, fullText.slice(0,16));
           } else if (ev.type==='done') {
-            finaliseAssistant(assTxt, ev.usage, Date.now()-t0);
-            if (ev.usage) updateTokenBadge(ev.usage, fullText.slice(0,16));
-            renderMessages(); done=true; break;
+            const aMsg=messages[assistantMsgIdx];
+            finaliseAssistant(assTxt, ev.usage, Date.now()-t0, ev.rag_chunks);
+            if(aMsg&&ev.routing) aMsg.route=ev.routing;
+            if(aMsg&&ev.agent_steps) aMsg.agentSteps=ev.agent_steps;
+            if(ev.stored_memory_id) loadMemories();
+            if(ev.usage) updateTokenBadge(ev.usage, fullText.slice(0,16));
+            renderMessages(); speakAssistant(assTxt); done=true; break;
           } else if (ev.type==='error') throw new Error(ev.content||'Streaming error.');
         }
       }
@@ -738,17 +931,34 @@ async function doSend(overrideText, editIdx=null, isRegen=false){
       const resp=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if (!resp.ok) throw new Error((await resp.text())||'Chat failed.');
       const d=await resp.json();
-      finaliseAssistant(d.output||'', d.usage, Date.now()-t0);
-      if (d.usage) updateTokenBadge(d.usage, fullText.slice(0,16));
+      finaliseAssistant(d.output||'', d.usage, Date.now()-t0, d.rag_chunks);
+      const aMsg=messages[assistantMsgIdx];
+      if(aMsg){
+        if(d.routing){
+    aMsg.route=d.routing;
+    if(currentModelText&&d.routing.model) currentModelText.textContent=`目前模型：${d.routing.model}`;
+    if(routeBadge&&d.routing.model){
+        routeBadge.textContent=`🔀 ${d.routing.model}`;
+        routeBadge.style.animation='none';
+        routeBadge.offsetHeight;
+        routeBadge.style.animation='routeFlash 0.6s ease';
+    }
+}
+        if(d.tool_events) aMsg.toolEvents=d.tool_events;
+        if(d.agent_steps) aMsg.agentSteps=d.agent_steps;
+      }
+      speakAssistant(d.output||'');
+      if(d.stored_memory_id) loadMemories();
+      if(d.usage) updateTokenBadge(d.usage, fullText.slice(0,16));
       renderMessages();
     }
   } catch(err) {
-    const aMsg = messages[assistantMsgIdx];
-    if (err.name==='AbortError') {
+    const aMsg=messages[assistantMsgIdx];
+    if(err.name==='AbortError'){
       setError('已停止生成。');
-      if (aMsg) { aMsg.isStreaming=false; if(aMsg.branches) aMsg.branches[aMsg.branchIdx]=aMsg.content; }
+      if(aMsg){aMsg.isStreaming=false;if(aMsg.branches)aMsg.branches[aMsg.branchIdx]=aMsg.content;}
     } else {
-      if (aMsg) { aMsg.content=`Error: ${err.message}`; aMsg.isStreaming=false; if(aMsg.branches) aMsg.branches[aMsg.branchIdx]=aMsg.content; }
+      if(aMsg){aMsg.content=`Error: ${err.message}`;aMsg.isStreaming=false;if(aMsg.branches)aMsg.branches[aMsg.branchIdx]=aMsg.content;}
       setError(err.message);
     }
     renderMessages();
@@ -757,7 +967,7 @@ async function doSend(overrideText, editIdx=null, isRegen=false){
   }
 }
 
-// ── Clear / stop ──────────────────────────────────────────────────────────────
+// ── Clear / stop / share ──────────────────────────────────────────────────────
 function clearChat(){
   if(abortController)abortController.abort();
   setError('');isLoading=false;clearAttachment();
@@ -766,17 +976,34 @@ function clearChat(){
 }
 function stopStreaming(){if(abortController)abortController.abort();}
 
+async function shareCurrentChat() {
+  if (!currentSessionId) { setError('目前沒有可分享的對話。'); return; }
+  try {
+    const resp = await fetch(`/api/sessions/${currentSessionId}/share`, { method:'POST' });
+    if (!resp.ok) throw new Error(await resp.text());
+    const data = await resp.json();
+    if (shareResultEl) {
+      shareResultEl.classList.remove('hidden');
+      shareResultEl.innerHTML = `<a href="${data.url}" target="_blank" rel="noopener">${data.url}</a><button class="mini-copy" type="button">複製</button>`;
+      const btn = shareResultEl.querySelector('button');
+      if (btn) btn.onclick = () => navigator.clipboard.writeText(data.url).then(()=>{btn.textContent='已複製';});
+    }
+  } catch(e) { setError('分享失敗：' + e.message); }
+}
+
 // ── Event wiring ──────────────────────────────────────────────────────────────
-[temperatureEl,topPEl,maxTokensEl,memoryWindowEl,thinkingBudgetEl,fontSizeEl].forEach(el=>el.addEventListener('input',updateControls));
-[streamingEl,shortMemoryEl,thinkingModeEl].forEach(el=>el.addEventListener('change',updateControls));
+[temperatureEl,topPEl,maxTokensEl,memoryWindowEl,thinkingBudgetEl,fontSizeEl,toolMaxIterEl].forEach(el=>el&&el.addEventListener('input',updateControls));
+[streamingEl,shortMemoryEl,thinkingModeEl,longMemoryEl,autoRouteEl,toolsEnabledEl,agentModeEl,ttsAutoEl].forEach(el=>{if(el)el.addEventListener('change',updateControls);});
 modelEl.addEventListener('change',updateControls);
 sendButton.addEventListener('click',sendMessage);
 clearChatButton.addEventListener('click',clearChat);
 stopStreamingButton.addEventListener('click',stopStreaming);
+if(shareChatBtn) shareChatBtn.addEventListener('click',shareCurrentChat);
+if(uploadBtn&&fileInput) uploadBtn.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();fileInput.disabled=false;fileInput.removeAttribute('disabled');fileInput.click();});
+if(fileInput) fileInput.disabled=false;
 newChatBtn.addEventListener('click',startNewChat);
 chatInput.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();}});
 
-// Chart toggle
 if(chartToggleBtn&&chartPanel){
   chartToggleBtn.addEventListener('click',()=>{
     const open=chartPanel.classList.toggle('open');
@@ -784,11 +1011,8 @@ if(chartToggleBtn&&chartPanel){
     if(open)renderChart();
   });
 }
-
-// Accent color picker
-if(accentCustomEl){
-  accentCustomEl.addEventListener('input',()=>applyAccent(accentCustomEl.value));
-}
+if(accentCustomEl) accentCustomEl.addEventListener('input',()=>applyAccent(accentCustomEl.value));
+if(refreshMemBtn) refreshMemBtn.addEventListener('click', loadMemories);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async()=>{
@@ -798,7 +1022,9 @@ if(accentCustomEl){
   const savedAccent=lsGet('accent','#10a37f');applyAccent(savedAccent);
   initVoice();
   renderPromptTemplates();
+  await loadTools();
+  await loadMemories();
   await loadSessions();
-  if(sessions.length>0)await loadSession(sessions[0].id);else await startNewChat();
+  if(sessions.length>0) await loadSession(sessions[0].id); else await startNewChat();
   updateControls();
 })();
